@@ -4,6 +4,42 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
+import math
+from io import BytesIO
+
+try:
+    import requests
+    from PIL import Image
+except ImportError:
+    # Lazy import guard: user may not have dependencies yet.
+    requests = None
+    Image = None
+
+def _ensure_deps():
+    if requests is None or Image is None:
+        raise RuntimeError("Missing dependencies. Install with: pip install requests Pillow")
+
+def _fetch_image_dimensions(image_url: str):
+    """Download the image (stream) and return (width, height).
+
+    Falls back to (None, None) on failure.
+    """
+    try:
+        _ensure_deps()
+        resp = requests.get(image_url, timeout=15)
+        resp.raise_for_status()
+        img = Image.open(BytesIO(resp.content))
+        width, height = img.size
+        return width, height
+    except Exception as e:
+        print(f"Failed to obtain image dimensions: {e}")
+        return None, None
+
+def _simplify_ratio(width: int, height: int):
+    if not width or not height:
+        return None
+    g = math.gcd(width, height)
+    return f"{width // g}:{height // g}"
 
 def get_one_wallpaper_after_shuffle():
     # Initialize the WebDriver (e.g., Chrome)
@@ -28,7 +64,7 @@ def get_one_wallpaper_after_shuffle():
             )
             shuffle_button.click()
 
-            time.sleep(1) 
+            time.sleep(2) 
             print("Content likely reloaded after shuffle.")
 
         except Exception as e:
@@ -51,10 +87,15 @@ def get_one_wallpaper_after_shuffle():
             # Extract details from the first wallpaper
             image_url = first_wallpaper_element.get_attribute("href")
 
+            width, height = _fetch_image_dimensions(image_url)
+            aspect_ratio = _simplify_ratio(width, height) if width and height else None
+
             wallpaper_info = {
                 "image_url": image_url,
-                # "title": title, # Uncomment and adjust if a title exists
-                # ... add other relevant data here
+                "width": width,
+                "height": height,
+                "aspect_ratio": aspect_ratio,
+                "aspect_ratio_float": round(width / height, 4) if width and height else None,
             }
 
             return wallpaper_info
