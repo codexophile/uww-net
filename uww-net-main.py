@@ -34,6 +34,7 @@ if __name__ == "__main__":
         else:
             os.makedirs(destinationFolder, exist_ok=True)
             print(f"\nDownloading {len(wallpapers)} image(s) to {destinationFolder} ...")
+            saved_files: list[str] = []
             for idx, wp in enumerate(wallpapers, start=1):
                 url = wp.get("image_url")
                 if not url:
@@ -42,5 +43,24 @@ if __name__ == "__main__":
                 saved_path = download_image(url, destinationFolder)
                 if saved_path:
                     print(f"Saved wallpaper {idx} -> {saved_path}")
+                    saved_files.append(os.path.abspath(saved_path))
                 else:
                     print(f"Failed to save wallpaper {idx}")
+
+            # Upon successful completion: delete any other existing files in destination folder
+            if saved_files:
+                keep_set = {os.path.normcase(p) for p in saved_files}
+                removed = 0
+                for entry in os.scandir(destinationFolder):
+                    if entry.is_file():
+                        ap = os.path.normcase(os.path.abspath(entry.path))
+                        if ap not in keep_set:
+                            try:
+                                os.remove(entry.path)
+                                removed += 1
+                            except Exception as e:
+                                print(f"Could not remove stale file '{entry.name}': {e}")
+                if removed:
+                    print(f"Pruned {removed} old file(s) from destination folder.")
+                else:
+                    print("No old files to prune in destination folder.")
