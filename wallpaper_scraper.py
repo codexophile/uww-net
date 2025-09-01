@@ -11,7 +11,6 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from image_utils import fetch_image_dimensions, simplify_ratio
 
-
 def get_one_wallpaper_after_shuffle() -> dict | None:
     """Fetch one wallpaper after pressing the shuffle button.
 
@@ -43,6 +42,9 @@ def get_one_wallpaper_after_shuffle() -> dict | None:
         driver.get("https://ultrawidewallpapers.net/gallery")
         print("Navigated to gallery page.")
         try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
+            )
             shuffle_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
             )
