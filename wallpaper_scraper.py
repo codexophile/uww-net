@@ -11,12 +11,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from image_utils import fetch_image_dimensions, simplify_ratio
 
-def get_one_wallpaper_after_shuffle() -> dict | None:
-    """Fetch one wallpaper after pressing the shuffle button.
-
-    Verbose Chromium / GCM auth errors (PHONE_REGISTRATION_ERROR, wrong_secret, etc.)
-    are suppressed via Chrome options & service log redirection.
-    """
+def _init_driver():
+    """Internal helper to create a quiet Chrome webdriver instance."""
     # Suppress noisy Chrome / GCM logs
     import os
     if os.name == "nt":  # Windows null device
@@ -37,7 +33,16 @@ def get_one_wallpaper_after_shuffle() -> dict | None:
     # Direct chromedriver's own logs to null
     service = Service(log_path="NUL" if os.name == "nt" else "/dev/null")
 
-    driver = webdriver.Chrome(options=chrome_options, service=service)
+    return webdriver.Chrome(options=chrome_options, service=service)
+
+
+def get_one_wallpaper_after_shuffle() -> dict | None:
+    """Fetch one wallpaper after pressing the shuffle button.
+
+    Verbose Chromium / GCM auth errors (PHONE_REGISTRATION_ERROR, wrong_secret, etc.)
+    are suppressed via Chrome options & service log redirection.
+    """
+    driver = _init_driver()
     try:
         driver.get("https://ultrawidewallpapers.net/gallery")
         print("Navigated to gallery page.")
@@ -78,4 +83,61 @@ def get_one_wallpaper_after_shuffle() -> dict | None:
         driver.quit()
 
 
-__all__ = ["get_one_wallpaper_after_shuffle"]
+def get_wallpapers_after_shuffle(count: int) -> list[dict]:
+    """Fetch up to `count` wallpapers after pressing shuffle once.
+
+    Returns a list with length 0..count. Each entry is same schema as
+    ``get_one_wallpaper_after_shuffle``.
+    """
+    if count <= 0:
+        return []
+    driver = _init_driver()
+    try:
+        driver.get("https://ultrawidewallpapers.net/gallery")
+        print("Navigated to gallery page.")
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
+            )
+            shuffle_button = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
+            )
+            shuffle_button.click()
+            time.sleep(2)
+            print("Content likely reloaded after shuffle.")
+        except Exception as e:
+            print(f"Could not find or click the shuffle button: {e}")
+            return []
+
+        try:
+            wallpaper_elements = driver.find_elements(By.CSS_SELECTOR, "#galleryContainer .image-link")
+            if not wallpaper_elements:
+                print("No wallpapers found after shuffle.")
+                return []
+            selected = wallpaper_elements[:count]
+            results: list[dict] = []
+            for idx, el in enumerate(selected, start=1):
+                try:
+                    image_url = el.get_attribute("href")
+                    width, height = fetch_image_dimensions(image_url)
+                    aspect_ratio = simplify_ratio(width, height)
+                    results.append(
+                        {
+                            "image_url": image_url,
+                            "width": width,
+                            "height": height,
+                            "aspect_ratio": aspect_ratio,
+                            "aspect_ratio_float": round(width / height, 4) if width and height else None,
+                        }
+                    )
+                    print(f"Collected wallpaper {idx}/{len(selected)}")
+                except Exception as inner_e:  # continue gathering others
+                    print(f"Failed to extract one wallpaper element: {inner_e}")
+            return results
+        except Exception as e:
+            print(f"Error extracting wallpapers: {e}")
+            return []
+    finally:
+        driver.quit()
+
+__all__ = ["get_one_wallpaper_after_shuffle", "get_wallpapers_after_shuffle"]
