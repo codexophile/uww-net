@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import time
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -11,7 +13,32 @@ from image_utils import fetch_image_dimensions, simplify_ratio
 
 
 def get_one_wallpaper_after_shuffle() -> dict | None:
-    driver = webdriver.Chrome()
+    """Fetch one wallpaper after pressing the shuffle button.
+
+    Verbose Chromium / GCM auth errors (PHONE_REGISTRATION_ERROR, wrong_secret, etc.)
+    are suppressed via Chrome options & service log redirection.
+    """
+    # Suppress noisy Chrome / GCM logs
+    import os
+    if os.name == "nt":  # Windows null device
+        os.environ.setdefault("CHROME_LOG_FILE", "NUL")
+    else:
+        os.environ.setdefault("CHROME_LOG_FILE", "/dev/null")
+
+    chrome_options = Options()
+    # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR (actually FATAL). We choose 3 to hide most stuff.
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_argument("--disable-logging")
+    # Remove the typical 'enable-logging' switch Selenium injects that causes extra stderr.
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])  # type: ignore[arg-type]
+    # (Optional) could further reduce by disabling notifications / GCM, uncomment if needed:
+    # chrome_options.add_argument("--disable-notifications")
+    # chrome_options.add_argument("--disable-gcm-registration")
+
+    # Direct chromedriver's own logs to null
+    service = Service(log_path="NUL" if os.name == "nt" else "/dev/null")
+
+    driver = webdriver.Chrome(options=chrome_options, service=service)
     try:
         driver.get("https://ultrawidewallpapers.net/gallery")
         print("Navigated to gallery page.")
