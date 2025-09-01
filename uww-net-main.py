@@ -36,7 +36,7 @@ def get_one_wallpaper_after_shuffle():
             # A simple time.sleep is used for demonstration, but a more robust wait condition
             # (like waiting for staleness of old elements or disappearance of a loading spinner)
             # would be better in a production scenario.
-            time.sleep(3) # Give time for new content to load
+            time.sleep(1) # Give time for new content to load
             print("Content likely reloaded after shuffle.")
 
         except Exception as e:
@@ -58,11 +58,6 @@ def get_one_wallpaper_after_shuffle():
 
             # Extract details from the first wallpaper
             image_url = first_wallpaper_element.get_attribute("href")
-
-            # You might need to inspect the HTML to find a title, categories, etc.
-            # Example (adjust selectors based on actual HTML):
-            # title_element = first_wallpaper_element.find_element(By.CLASS_NAME, "wallpaper-title")
-            # title = title_element.text if title_element else "N/A"
 
             wallpaper_info = {
                 "image_url": image_url,
