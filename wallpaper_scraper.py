@@ -21,9 +21,22 @@ def _init_driver():
         os.environ.setdefault("CHROME_LOG_FILE", "/dev/null")
 
     chrome_options = Options()
+    # Run fully headless so no Chrome window appears.
+    # Use the modern headless implementation (Chrome 109+) for better compatibility.
+    # If an older Chrome version is in use, Selenium/Chrome will gracefully fall back.
+    chrome_options.add_argument("--headless=new")
+    # Helpful stability flags when headless (esp. on Windows / some GPU drivers):
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-first-run")
+    chrome_options.add_argument("--no-default-browser-check")
+    chrome_options.add_argument("--disable-crash-reporter")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-in-process-stack-traces")
+    chrome_options.add_argument("--disable-logging")  # keep explicit though we also exclude below
+    chrome_options.add_argument("--disable-dev-shm-usage")  # robustness in constrained environments
+    chrome_options.add_argument("--window-size=1920,1080")  # consistent layout calculations headless
     # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR (actually FATAL). We choose 3 to hide most stuff.
     chrome_options.add_argument("--log-level=3")
-    chrome_options.add_argument("--disable-logging")
     # Remove the typical 'enable-logging' switch Selenium injects that causes extra stderr.
     chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])  # type: ignore[arg-type]
     # (Optional) could further reduce by disabling notifications / GCM, uncomment if needed:
