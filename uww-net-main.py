@@ -3,7 +3,7 @@ import os
 
 from monitors import gather_monitors
 from wallpaper_scraper import get_wallpapers_after_shuffle
-from image_utils import ensure_dependencies, download_image
+from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
 
 destinationFolder = "C:\\media\\wallpapers"
 
@@ -32,24 +32,53 @@ if __name__ == "__main__":
         except RuntimeError as dep_err:
             print(f"Cannot download images (missing deps): {dep_err}")
         else:
-            os.makedirs(destinationFolder, exist_ok=True)
-            print(f"\nDownloading {len(wallpapers)} image(s) to {destinationFolder} ...")
-            saved_files: list[str] = []
+            import tempfile, shutil
+            tmp_dir = tempfile.mkdtemp(prefix="uww_dl_")
+            print(f"\nDownloading {len(wallpapers)} image(s) to temporary folder {tmp_dir} ...")
+            tmp_files: list[str] = []
             for idx, wp in enumerate(wallpapers, start=1):
                 url = wp.get("image_url")
                 if not url:
                     print(f"Wallpaper {idx} missing image_url, skipping.")
                     continue
-                saved_path = download_image(url, destinationFolder)
+                saved_path = download_image(url, tmp_dir)
                 if saved_path:
-                    print(f"Saved wallpaper {idx} -> {saved_path}")
-                    saved_files.append(os.path.abspath(saved_path))
+                    print(f"Downloaded wallpaper {idx} -> {saved_path}")
+                    tmp_files.append(saved_path)
                 else:
-                    print(f"Failed to save wallpaper {idx}")
+                    print(f"Failed to download wallpaper {idx}")
 
-            # Upon successful completion: delete any other existing files in destination folder
-            if saved_files:
-                keep_set = {os.path.normcase(p) for p in saved_files}
+            # Crop each downloaded image to 16:9 (center crop)
+            cropped_files: list[str] = []
+            for path in tmp_files:
+                cropped = crop_image_to_aspect(path, 16, 9, inplace=True)
+                if cropped:
+                    cropped_files.append(cropped)
+                else:
+                    print(f"Skipping move for image that failed to crop: {path}")
+
+            # Move cropped images into destination folder
+            os.makedirs(destinationFolder, exist_ok=True)
+            final_files: list[str] = []
+            for src in cropped_files:
+                try:
+                    fname = os.path.basename(src)
+                    dest_path = os.path.join(destinationFolder, fname)
+                    # If a file with same name exists, overwrite (we prune anyway)
+                    shutil.move(src, dest_path)
+                    final_files.append(os.path.abspath(dest_path))
+                except Exception as e:
+                    print(f"Failed to move {src} into destination: {e}")
+
+            # Clean up temporary directory (ignore errors)
+            try:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+            # Prune destination folder to only keep final_files
+            if final_files:
+                keep_set = {os.path.normcase(p) for p in final_files}
                 removed = 0
                 for entry in os.scandir(destinationFolder):
                     if entry.is_file():
@@ -64,3 +93,5 @@ if __name__ == "__main__":
                     print(f"Pruned {removed} old file(s) from destination folder.")
                 else:
                     print("No old files to prune in destination folder.")
+            else:
+                print("No images successfully processed; destination unchanged.")
