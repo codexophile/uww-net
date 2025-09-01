@@ -1,4 +1,5 @@
 from dataclasses import asdict
+import os
 
 from monitors import gather_monitors
 from wallpaper_scraper import get_one_wallpaper_after_shuffle
