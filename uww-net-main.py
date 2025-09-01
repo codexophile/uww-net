@@ -23,20 +23,12 @@ def get_one_wallpaper_after_shuffle():
 
         # 2. Locate and click the "Shuffle" button
         try:
-            # IMPORTANT: Replace this with the actual selector for the shuffle button
-            # Based on inspection, a common pattern for sort/filter links is used here.
             shuffle_button = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
             )
-            print("Found shuffle button.")
             shuffle_button.click()
-            print("Shuffle button clicked. Waiting for content to reload...")
 
-            # Wait for the content to reload after clicking shuffle.
-            # A simple time.sleep is used for demonstration, but a more robust wait condition
-            # (like waiting for staleness of old elements or disappearance of a loading spinner)
-            # would be better in a production scenario.
-            time.sleep(1) # Give time for new content to load
+            time.sleep(1) 
             print("Content likely reloaded after shuffle.")
 
         except Exception as e:
