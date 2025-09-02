@@ -3,12 +3,29 @@ import os
 import time
 import argparse
 from datetime import datetime
+import threading
+import pystray
+from PIL import Image, ImageDraw
 
 from monitors import gather_monitors
 from wallpaper_scraper import get_wallpapers_after_shuffle
 from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
 
+# Global flag to control the wallpaper loop
+running = True
+
 destinationFolder = "C:\\media\\wallpapers"
+
+
+def create_icon():
+    """Create a simple tray icon."""
+    # Create a 64x64 icon
+    img = Image.new('RGB', (64, 64), color='blue')
+    draw = ImageDraw.Draw(img)
+    # Draw a simple wallpaper-like pattern (stripes)
+    for i in range(0, 64, 8):
+        draw.rectangle([i, 0, i+4, 64], fill='white')
+    return img
 
 
 def run_once() -> bool:
@@ -110,15 +127,24 @@ def run_once() -> bool:
     return bool(final_files)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="UltraWideWallpapers fetcher loop")
-    parser.add_argument("--interval", type=int, default=600, help="Interval between runs in seconds (default 600)")
-    parser.add_argument("--once", action="store_true", help="Run only once then exit")
-    parser.add_argument("--no-clear", action="store_true", help="Do not clear the console at start of each run")
-    args = parser.parse_args()
+def run_once_wrapper(args):
+    """Wrapper to run once with proper output handling."""
+    if os.name == "nt" and not args.no_clear:
+        os.system("cls")
+    elif not args.no_clear:
+        os.system("clear")
+    print("===== Manual Run =====")
+    start = time.time()
+    success = run_once()
+    duration = time.time() - start
+    print(f"Manual run {'succeeded' if success else 'completed'} in {duration:.1f}s")
 
+
+def wallpaper_loop(args):
+    """Main wallpaper fetching loop."""
+    global running
     run_number = 0
-    while True:
+    while running:
         run_number += 1
         if os.name == "nt" and not args.no_clear:
             os.system("cls")
@@ -129,7 +155,7 @@ def main():
         success = run_once()
         duration = time.time() - start
         print(f"Run #{run_number} {'succeeded' if success else 'completed'} in {duration:.1f}s")
-        if args.once:
+        if not running:
             break
         sleep_for = max(0, args.interval - duration)
         print(f"Sleeping {sleep_for:.1f}s (next run approx at {datetime.now() + timedelta(seconds=sleep_for):%H:%M:%S})")
@@ -138,6 +164,47 @@ def main():
         except KeyboardInterrupt:
             print("Interrupted. Exiting loop.")
             break
+
+
+def main():
+    parser = argparse.ArgumentParser(description="UltraWideWallpapers fetcher loop")
+    parser.add_argument("--interval", type=int, default=600, help="Interval between runs in seconds (default 600)")
+    parser.add_argument("--once", action="store_true", help="Run only once then exit")
+    parser.add_argument("--no-clear", action="store_true", help="Do not clear the console at start of each run")
+    args = parser.parse_args()
+
+    # Global flag to control the loop
+    global running
+    running = True
+
+    def run_now(icon, item):
+        """Run wallpaper fetch immediately."""
+        threading.Thread(target=run_once_wrapper, args=(args,), daemon=True).start()
+
+    def exit_app(icon, item):
+        """Exit the application."""
+        global running
+        running = False
+        icon.stop()
+
+    # Create tray icon
+    icon = pystray.Icon("uww-net", create_icon(), "UltraWideWallpapers")
+    icon.menu = pystray.Menu(
+        pystray.MenuItem("Run Now", run_now),
+        pystray.MenuItem("Exit", exit_app)
+    )
+
+    # Start the wallpaper loop in a separate thread
+    if not args.once:
+        loop_thread = threading.Thread(target=wallpaper_loop, args=(args,), daemon=True)
+        loop_thread.start()
+
+    # Run tray icon (this will block until exit)
+    icon.run()
+
+    # If once mode, run once before starting tray
+    if args.once:
+        run_once_wrapper(args)
 
 
 if __name__ == "__main__":
