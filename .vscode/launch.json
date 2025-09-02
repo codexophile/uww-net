@@ -8,7 +8,7 @@
       "name": "Python Debugger: uww-net-main",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/uww-net-main.py",
+      "program": "${workspaceFolder}/uww-net-main.pyw",
       "console": "integratedTerminal"
     }
   ]
