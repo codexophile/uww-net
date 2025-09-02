@@ -19,7 +19,7 @@ def ensure_dependencies():
         raise RuntimeError("Missing dependencies. Install with: pip install requests Pillow")
 
 
-def fetch_image_dimensions(image_url: str) -> tuple[int | None, int | None]:
+def fetch_image_dimensions(image_url: str, verbose: bool = True) -> tuple[int | None, int | None]:
     try:
         ensure_dependencies()
         resp = requests.get(image_url, timeout=15)  # type: ignore
@@ -28,7 +28,8 @@ def fetch_image_dimensions(image_url: str) -> tuple[int | None, int | None]:
         width, height = img.size
         return width, height
     except Exception as e:  # pragma: no cover
-        print(f"Failed to obtain image dimensions: {e}")
+        if verbose:
+            print(f"Failed to obtain image dimensions: {e}")
         return None, None
 
 
@@ -46,7 +47,7 @@ def _sanitize_filename(name: str) -> str:
     return name or "image.jpg"
 
 
-def download_image(image_url: str, destination_folder: str, filename: str | None = None) -> str | None:
+def download_image(image_url: str, destination_folder: str, filename: str | None = None, verbose: bool = True) -> str | None:
     """Download an image to ``destination_folder``.
 
     Returns the absolute path of the saved file or ``None`` on failure.
@@ -70,13 +71,15 @@ def download_image(image_url: str, destination_folder: str, filename: str | None
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "").lower()
         if "image" not in content_type:
-            print(f"Skipped non-image url: {image_url} -> {content_type}")
+            if verbose:
+                print(f"Skipped non-image url: {image_url} -> {content_type}")
             return None
         with open(dest_path, "wb") as f:
             f.write(resp.content)
         return dest_path
     except Exception as e:  # pragma: no cover
-        print(f"Failed to download image {image_url}: {e}")
+        if verbose:
+            print(f"Failed to download image {image_url}: {e}")
         return None
 
 
@@ -86,6 +89,7 @@ def crop_image_to_aspect(
     aspect_h: int = 9,
     inplace: bool = True,
     output_path: str | None = None,
+    verbose: bool = True,
 ) -> str | None:
     """Crop an image file to the target aspect ratio (default 16:9) centered.
 
@@ -142,7 +146,8 @@ def crop_image_to_aspect(
             cropped.save(dest_path, **save_kwargs)
             return dest_path
     except Exception as e:  # pragma: no cover
-        print(f"Failed to crop image '{image_path}' to {aspect_w}:{aspect_h}: {e}")
+        if verbose:
+            print(f"Failed to crop image '{image_path}' to {aspect_w}:{aspect_h}: {e}")
         return None
 
 

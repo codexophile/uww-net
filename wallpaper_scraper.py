@@ -24,7 +24,11 @@ def _init_driver():
     # Run fully headless so no Chrome window appears.
     # Use the modern headless implementation (Chrome 109+) for better compatibility.
     # If an older Chrome version is in use, Selenium/Chrome will gracefully fall back.
-    chrome_options.add_argument("--headless=new")
+    try:
+        chrome_options.add_argument("--headless=new")
+    except:
+        # Fallback to old headless mode if new one fails
+        chrome_options.add_argument("--headless")
     # Helpful stability flags when headless (esp. on Windows / some GPU drivers):
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-first-run")
@@ -39,17 +43,31 @@ def _init_driver():
     chrome_options.add_argument("--log-level=3")
     # Remove the typical 'enable-logging' switch Selenium injects that causes extra stderr.
     chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])  # type: ignore[arg-type]
-    # (Optional) could further reduce by disabling notifications / GCM, uncomment if needed:
-    # chrome_options.add_argument("--disable-notifications")
-    # chrome_options.add_argument("--disable-gcm-registration")
+    # Essential option to disable DevTools remote debugging
+    chrome_options.add_argument("--remote-debugging-port=0")  # Disable remote debugging
 
     # Direct chromedriver's own logs to null
-    service = Service(log_path="NUL" if os.name == "nt" else "/dev/null")
+    service = Service(log_path=os.devnull if hasattr(os, 'devnull') else ("NUL" if os.name == "nt" else "/dev/null"))
+    
+    # Try to suppress any remaining output
+    import sys
+    from contextlib import redirect_stderr, redirect_stdout
+    
+    try:
+        with redirect_stdout(open(os.devnull, 'w')), redirect_stderr(open(os.devnull, 'w')):
+            driver = webdriver.Chrome(options=chrome_options, service=service)
+            return driver
+    except Exception as e:
+        # If redirection fails, try without it
+        try:
+            driver = webdriver.Chrome(options=chrome_options, service=service)
+            return driver
+        except Exception as e2:
+            # If that also fails, provide a helpful error message
+            raise RuntimeError(f"Failed to create Chrome WebDriver. Please ensure Chrome is installed and up to date. Error: {e2}") from e2
 
-    return webdriver.Chrome(options=chrome_options, service=service)
 
-
-def get_wallpapers_after_shuffle(count: int) -> list[dict]:
+def get_wallpapers_after_shuffle(count: int, verbose: bool = True) -> list[dict]:
     """Fetch up to `count` wallpapers after pressing shuffle once.
 
     Returns a list with length 0..count. Each entry is same schema as
@@ -60,7 +78,8 @@ def get_wallpapers_after_shuffle(count: int) -> list[dict]:
     driver = _init_driver()
     try:
         driver.get("https://ultrawidewallpapers.net/gallery")
-        print("Navigated to gallery page.")
+        if verbose:
+            print("Navigated to gallery page.")
         try:
             WebDriverWait(driver, 10).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
@@ -70,22 +89,25 @@ def get_wallpapers_after_shuffle(count: int) -> list[dict]:
             )
             shuffle_button.click()
             time.sleep(2)
-            print("Content likely reloaded after shuffle.")
+            if verbose:
+                print("Content likely reloaded after shuffle.")
         except Exception as e:
-            print(f"Could not find or click the shuffle button: {e}")
+            if verbose:
+                print(f"Could not find or click the shuffle button: {e}")
             return []
 
         try:
             wallpaper_elements = driver.find_elements(By.CSS_SELECTOR, "#galleryContainer .image-link")
             if not wallpaper_elements:
-                print("No wallpapers found after shuffle.")
+                if verbose:
+                    print("No wallpapers found after shuffle.")
                 return []
             selected = wallpaper_elements[:count]
             results: list[dict] = []
             for idx, el in enumerate(selected, start=1):
                 try:
                     image_url = el.get_attribute("href")
-                    width, height = fetch_image_dimensions(image_url)
+                    width, height = fetch_image_dimensions(image_url, verbose)
                     aspect_ratio = simplify_ratio(width, height)
                     results.append(
                         {
@@ -96,12 +118,15 @@ def get_wallpapers_after_shuffle(count: int) -> list[dict]:
                             "aspect_ratio_float": round(width / height, 4) if width and height else None,
                         }
                     )
-                    print(f"Collected wallpaper {idx}/{len(selected)}")
+                    if verbose:
+                        print(f"Collected wallpaper {idx}/{len(selected)}")
                 except Exception as inner_e:  # continue gathering others
-                    print(f"Failed to extract one wallpaper element: {inner_e}")
+                    if verbose:
+                        print(f"Failed to extract one wallpaper element: {inner_e}")
             return results
         except Exception as e:
-            print(f"Error extracting wallpapers: {e}")
+            if verbose:
+                print(f"Error extracting wallpapers: {e}")
             return []
     finally:
         driver.quit()

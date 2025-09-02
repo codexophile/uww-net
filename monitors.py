@@ -47,7 +47,7 @@ class MonitorInfo:
             return None
 
 
-def _gather_monitors_screeninfo():  # pragma: no cover - external dep variability
+def _gather_monitors_screeninfo(verbose: bool = True):  # pragma: no cover - external dep variability
     if not _screeninfo_get_monitors:
         return None
     monitors = []
@@ -66,11 +66,12 @@ def _gather_monitors_screeninfo():  # pragma: no cover - external dep variabilit
             )
         return monitors
     except Exception as e:
-        print(f"screeninfo monitor enumeration failed: {e}")
+        if verbose:
+            print(f"screeninfo monitor enumeration failed: {e}")
         return None
 
 
-def _gather_monitors_windows_ctypes():  # pragma: no cover - platform specific
+def _gather_monitors_windows_ctypes(verbose: bool = True):  # pragma: no cover - platform specific
     if os.name != "nt":
         return None
     try:
@@ -120,7 +121,8 @@ def _gather_monitors_windows_ctypes():  # pragma: no cover - platform specific
         user32.EnumDisplayMonitors(0, 0, MonitorEnumProc(_callback), 0)
         return monitors
     except Exception as e:
-        print(f"ctypes monitor enumeration failed: {e}")
+        if verbose:
+            print(f"ctypes monitor enumeration failed: {e}")
         return None
 
 
@@ -148,10 +150,10 @@ def _gather_monitors_tkinter_primary_only():  # pragma: no cover - fallback
         return None
 
 
-def gather_monitors() -> list[MonitorInfo]:
+def gather_monitors(verbose: bool = True) -> list[MonitorInfo]:
     for strat in (
-        _gather_monitors_screeninfo,
-        _gather_monitors_windows_ctypes,
+        lambda: _gather_monitors_screeninfo(verbose),
+        lambda: _gather_monitors_windows_ctypes(verbose),
         _gather_monitors_tkinter_primary_only,
     ):
         result = strat()
