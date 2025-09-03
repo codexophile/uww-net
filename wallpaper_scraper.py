@@ -46,18 +46,17 @@ def get_unique_wallpapers(
 
         attempts = 0
         while len(collected) < count and attempts < max_shuffles:
-            if attempts > 0:
-                # Click shuffle to get new set
-                try:
-                    shuffle_button = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
-                    )
-                    shuffle_button.click()
-                    time.sleep(2)
-                except Exception as e:
-                    if verbose:
-                        print(f"Shuffle attempt {attempts+1} failed: {e}")
-                    break
+            # Always click shuffle (including first attempt) to ensure fresh set
+            try:
+                shuffle_button = WebDriverWait(driver, 5).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
+                )
+                shuffle_button.click()
+                time.sleep(2)
+            except Exception as e:
+                if verbose:
+                    print(f"Shuffle attempt {attempts+1} failed: {e}")
+                break
             attempts += 1
             try:
                 wallpaper_elements = driver.find_elements(By.CSS_SELECTOR, "#galleryContainer .image-link")

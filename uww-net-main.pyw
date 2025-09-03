@@ -319,12 +319,30 @@ def main():
         running = False
         icon.stop()
 
+    def restart_app(icon, item):
+        """Restart the whole script with original arguments."""
+        import sys, subprocess
+        global running
+        running = False
+        # Build command: current interpreter + current script + original args (excluding any leading path modifications)
+        script_path = os.path.abspath(__file__)
+        cmd = [sys.executable, script_path] + sys.argv[1:]
+        try:
+            subprocess.Popen(cmd, close_fds=False)
+        except Exception as e:
+            print(f"Failed to restart: {e}")
+            return
+        # Stop tray icon then terminate current process
+        icon.stop()
+        os._exit(0)
+
     # Create tray icon
     icon = pystray.Icon("uww-net", create_icon(), "UltraWideWallpapers")
     icon.menu = pystray.Menu(
         pystray.MenuItem("Run Now", run_now),
         pystray.MenuItem("Toggle Console", toggle_console),
         pystray.MenuItem("Toggle Logging", toggle_verbose_logging),
+    pystray.MenuItem("Restart", restart_app),
         pystray.MenuItem("Exit", exit_app)
     )
 
