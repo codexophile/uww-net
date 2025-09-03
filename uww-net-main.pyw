@@ -10,7 +10,7 @@ import ctypes
 from ctypes import wintypes
 
 from monitors import gather_monitors
-from wallpaper_scraper import get_wallpapers_after_shuffle
+from wallpaper_scraper import get_wallpapers_after_shuffle, get_unique_wallpapers
 from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
 from download_history import load_history, append_history
 
@@ -89,7 +89,21 @@ def run_once() -> bool:
     monitors_list = gather_monitors(verbose_logging)
     monitor_count = len(monitors_list)
     log_print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Detected {monitor_count} monitor(s).")
-    wallpapers = get_wallpapers_after_shuffle(monitor_count, verbose_logging)
+    # Load history early so we can request unique wallpapers
+    os.makedirs(destinationFolder, exist_ok=True)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    history_file = os.path.join(script_dir, "download_history.txt")
+    downloaded_history = load_history(history_file)
+
+    if downloaded_history:
+        log_print(f"Loaded download history with {len(downloaded_history)} entries.")
+    else:
+        log_print("No prior download history (starting fresh).")
+
+    # Attempt to get unique wallpapers (fallback to basic shuffle if zero returned)
+    wallpapers = get_unique_wallpapers(monitor_count, skip_urls=downloaded_history, verbose=verbose_logging)
+    if not wallpapers:
+        wallpapers = get_wallpapers_after_shuffle(monitor_count, verbose_logging)
     if wallpapers and len(wallpapers) == monitor_count:
         log_print(f"Successfully extracted {len(wallpapers)} wallpapers (one per monitor).")
     elif wallpapers:
@@ -110,14 +124,7 @@ def run_once() -> bool:
 
     import tempfile, shutil
     # Load persistent history of previously downloaded image URLs
-    os.makedirs(destinationFolder, exist_ok=True)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    history_file = os.path.join(script_dir, "download_history.txt")
-    downloaded_history = load_history(history_file)
-    if downloaded_history:
-        log_print(f"Loaded download history with {len(downloaded_history)} entries.")
-    else:
-        log_print("No prior download history (starting fresh).")
+    # downloaded_history already loaded above
     tmp_dir = tempfile.mkdtemp(prefix="uww_dl_")
     log_print(f"Downloading {len(wallpapers)} image(s) to temporary folder {tmp_dir} ...")
     tmp_files: list[str] = []

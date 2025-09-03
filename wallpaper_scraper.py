@@ -11,6 +11,90 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from image_utils import fetch_image_dimensions, simplify_ratio
 
+def get_unique_wallpapers(
+    count: int,
+    skip_urls: set[str] | None = None,
+    verbose: bool = True,
+    max_shuffles: int = 25,
+) -> list[dict]:
+    """Fetch up to ``count`` wallpapers whose URLs are not in ``skip_urls``.
+
+    This function keeps a single Selenium session open and presses the shuffle
+    button repeatedly (up to ``max_shuffles``) until it accumulates the desired
+    number of new / unseen wallpapers or exhausts attempts.
+
+    Returns a (possibly smaller) list of wallpaper dicts with the same schema as
+    ``get_wallpapers_after_shuffle``.
+    """
+    if count <= 0:
+        return []
+    skip_urls = skip_urls or set()
+    driver = _init_driver()
+    collected: list[dict] = []
+    try:
+        driver.get("https://ultrawidewallpapers.net/gallery")
+        if verbose:
+            print("Navigated to gallery page (unique mode).")
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
+            )
+        except Exception as e:
+            if verbose:
+                print(f"Initial gallery load failed: {e}")
+            return []
+
+        attempts = 0
+        while len(collected) < count and attempts < max_shuffles:
+            if attempts > 0:
+                # Click shuffle to get new set
+                try:
+                    shuffle_button = WebDriverWait(driver, 5).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
+                    )
+                    shuffle_button.click()
+                    time.sleep(2)
+                except Exception as e:
+                    if verbose:
+                        print(f"Shuffle attempt {attempts+1} failed: {e}")
+                    break
+            attempts += 1
+            try:
+                wallpaper_elements = driver.find_elements(By.CSS_SELECTOR, "#galleryContainer .image-link")
+            except Exception as e:
+                if verbose:
+                    print(f"Failed to enumerate wallpaper elements: {e}")
+                break
+            for el in wallpaper_elements:
+                if len(collected) >= count:
+                    break
+                try:
+                    image_url = el.get_attribute("href")
+                    if not image_url or image_url in skip_urls or any(r.get("image_url") == image_url for r in collected):
+                        continue
+                    width, height = fetch_image_dimensions(image_url, verbose)
+                    aspect_ratio = simplify_ratio(width, height)
+                    collected.append(
+                        {
+                            "image_url": image_url,
+                            "width": width,
+                            "height": height,
+                            "aspect_ratio": aspect_ratio,
+                            "aspect_ratio_float": round(width / height, 4) if width and height else None,
+                        }
+                    )
+                    if verbose:
+                        print(f"Collected unique wallpaper {len(collected)}/{count}")
+                except Exception as inner_e:
+                    if verbose:
+                        print(f"Failed extracting a wallpaper element: {inner_e}")
+            # If we didn't gain any new images this attempt, continue to next shuffle
+        if verbose and len(collected) < count:
+            print(f"Only gathered {len(collected)}/{count} unique wallpapers after {attempts} attempt(s).")
+        return collected
+    finally:
+        driver.quit()
+
 def _init_driver():
     """Internal helper to create a quiet Chrome webdriver instance."""
     # Suppress noisy Chrome / GCM logs
@@ -131,4 +215,4 @@ def get_wallpapers_after_shuffle(count: int, verbose: bool = True) -> list[dict]
     finally:
         driver.quit()
 
-__all__ = ["get_wallpapers_after_shuffle"]
+__all__ = ["get_wallpapers_after_shuffle", "get_unique_wallpapers"]
