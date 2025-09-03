@@ -8,11 +8,53 @@ import pystray
 from PIL import Image, ImageDraw
 import ctypes
 from ctypes import wintypes
+import json
 
 from monitors import gather_monitors
 from wallpaper_scraper import get_wallpapers_after_shuffle, get_unique_wallpapers
 from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
 from download_history import load_history, append_history
+
+# Load configuration
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+try:
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+except FileNotFoundError:
+    print(f"Config file not found at {config_path}. Using default values.")
+    config = {
+        "destination_folder": "C:\\media\\wallpapers",
+        "verbose_logging": True,
+        "interval_seconds": 600,
+        "aspect_ratio": {"width": 16, "height": 9},
+        "temp_dir_prefix": "uww_dl_",
+        "history_file": "download_history.txt",
+        "wallpaper_source": {
+            "url": "https://ultrawidewallpapers.net/gallery",
+            "max_shuffles": 25,
+            "webdriver_timeout": 10,
+            "shuffle_timeout": 5,
+            "window_size": "1920,1080"
+        }
+    }
+except json.JSONDecodeError as e:
+    print(f"Error parsing config file: {e}. Using default values.")
+    config = {
+        "destination_folder": "C:\\media\\wallpapers",
+        "verbose_logging": True,
+        "interval_seconds": 600,
+        "aspect_ratio": {"width": 16, "height": 9},
+        "temp_dir_prefix": "uww_dl_",
+        "history_file": "download_history.txt",
+        "wallpaper_source": {
+            "url": "https://ultrawidewallpapers.net/gallery",
+            "max_shuffles": 25,
+            "webdriver_timeout": 10,
+            "shuffle_timeout": 5,
+            "window_size": "1920,1080"
+        }
+    }
 
 # Windows API constants and functions for console manipulation
 SW_HIDE = 0
@@ -37,9 +79,9 @@ running = True
 console_visible = False
 
 # Global flag for verbose logging
-verbose_logging = True
+verbose_logging = config["verbose_logging"]
 
-destinationFolder = "C:\\media\\wallpapers"
+destinationFolder = config["destination_folder"]
 
 
 def log_print(*args, **kwargs):
@@ -92,7 +134,7 @@ def run_once() -> bool:
     # Load history early so we can request unique wallpapers
     os.makedirs(destinationFolder, exist_ok=True)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    history_file = os.path.join(script_dir, "download_history.txt")
+    history_file = os.path.join(script_dir, config["history_file"])
     downloaded_history = load_history(history_file)
 
     if downloaded_history:
@@ -101,9 +143,24 @@ def run_once() -> bool:
         log_print("No prior download history (starting fresh).")
 
     # Attempt to get unique wallpapers (fallback to basic shuffle if zero returned)
-    wallpapers = get_unique_wallpapers(monitor_count, skip_urls=downloaded_history, verbose=verbose_logging)
+    wallpapers = get_unique_wallpapers(
+        monitor_count, 
+        skip_urls=downloaded_history, 
+        verbose=verbose_logging, 
+        max_shuffles=config["wallpaper_source"]["max_shuffles"],
+        url=config["wallpaper_source"]["url"],
+        webdriver_timeout=config["wallpaper_source"]["webdriver_timeout"],
+        window_size=config["wallpaper_source"]["window_size"],
+        shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"]
+    )
     if not wallpapers:
-        wallpapers = get_wallpapers_after_shuffle(monitor_count, verbose_logging)
+        wallpapers = get_wallpapers_after_shuffle(
+            monitor_count, 
+            verbose_logging,
+            config["wallpaper_source"]["url"],
+            config["wallpaper_source"]["webdriver_timeout"],
+            config["wallpaper_source"]["window_size"]
+        )
     if wallpapers and len(wallpapers) == monitor_count:
         log_print(f"Successfully extracted {len(wallpapers)} wallpapers (one per monitor).")
     elif wallpapers:
@@ -125,7 +182,7 @@ def run_once() -> bool:
     import tempfile, shutil
     # Load persistent history of previously downloaded image URLs
     # downloaded_history already loaded above
-    tmp_dir = tempfile.mkdtemp(prefix="uww_dl_")
+    tmp_dir = tempfile.mkdtemp(prefix=config["temp_dir_prefix"])
     log_print(f"Downloading {len(wallpapers)} image(s) to temporary folder {tmp_dir} ...")
     tmp_files: list[str] = []
     url_for_file: dict[str, str] = {}
@@ -147,7 +204,7 @@ def run_once() -> bool:
 
     cropped_files: list[str] = []
     for path in tmp_files:
-        cropped = crop_image_to_aspect(path, 16, 9, inplace=True, verbose=verbose_logging)
+        cropped = crop_image_to_aspect(path, config["aspect_ratio"]["width"], config["aspect_ratio"]["height"], inplace=True, verbose=verbose_logging)
         if cropped:
             cropped_files.append(cropped)
         else:
@@ -300,7 +357,7 @@ def main():
             ShowWindow(hwnd, SW_HIDE)
     
     parser = argparse.ArgumentParser(description="UltraWideWallpapers fetcher loop")
-    parser.add_argument("--interval", type=int, default=600, help="Interval between runs in seconds (default 600)")
+    parser.add_argument("--interval", type=int, default=config["interval_seconds"], help=f"Interval between runs in seconds (default {config['interval_seconds']})")
     parser.add_argument("--once", action="store_true", help="Run only once then exit")
     parser.add_argument("--no-clear", action="store_true", help="Do not clear the console at start of each run")
     args = parser.parse_args()

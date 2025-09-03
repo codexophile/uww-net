@@ -16,6 +16,10 @@ def get_unique_wallpapers(
     skip_urls: set[str] | None = None,
     verbose: bool = True,
     max_shuffles: int = 25,
+    url: str = "https://ultrawidewallpapers.net/gallery",
+    webdriver_timeout: int = 10,
+    window_size: str = "1920,1080",
+    shuffle_timeout: int = 5,
 ) -> list[dict]:
     """Fetch up to ``count`` wallpapers whose URLs are not in ``skip_urls``.
 
@@ -29,14 +33,14 @@ def get_unique_wallpapers(
     if count <= 0:
         return []
     skip_urls = skip_urls or set()
-    driver = _init_driver()
+    driver = _init_driver(window_size)
     collected: list[dict] = []
     try:
-        driver.get("https://ultrawidewallpapers.net/gallery")
+        driver.get(url)
         if verbose:
             print("Navigated to gallery page (unique mode).")
         try:
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, webdriver_timeout).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
             )
         except Exception as e:
@@ -48,7 +52,7 @@ def get_unique_wallpapers(
         while len(collected) < count and attempts < max_shuffles:
             # Always click shuffle (including first attempt) to ensure fresh set
             try:
-                shuffle_button = WebDriverWait(driver, 5).until(
+                shuffle_button = WebDriverWait(driver, shuffle_timeout).until(
                     EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
                 )
                 shuffle_button.click()
@@ -94,7 +98,7 @@ def get_unique_wallpapers(
     finally:
         driver.quit()
 
-def _init_driver():
+def _init_driver(window_size: str = "1920,1080"):
     """Internal helper to create a quiet Chrome webdriver instance."""
     # Suppress noisy Chrome / GCM logs
     import os
@@ -121,7 +125,7 @@ def _init_driver():
     chrome_options.add_argument("--disable-in-process-stack-traces")
     chrome_options.add_argument("--disable-logging")  # keep explicit though we also exclude below
     chrome_options.add_argument("--disable-dev-shm-usage")  # robustness in constrained environments
-    chrome_options.add_argument("--window-size=1920,1080")  # consistent layout calculations headless
+    chrome_options.add_argument(f"--window-size={window_size}")  # consistent layout calculations headless
     # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR (actually FATAL). We choose 3 to hide most stuff.
     chrome_options.add_argument("--log-level=3")
     # Remove the typical 'enable-logging' switch Selenium injects that causes extra stderr.
@@ -150,7 +154,13 @@ def _init_driver():
             raise RuntimeError(f"Failed to create Chrome WebDriver. Please ensure Chrome is installed and up to date. Error: {e2}") from e2
 
 
-def get_wallpapers_after_shuffle(count: int, verbose: bool = True) -> list[dict]:
+def get_wallpapers_after_shuffle(
+    count: int, 
+    verbose: bool = True,
+    url: str = "https://ultrawidewallpapers.net/gallery",
+    webdriver_timeout: int = 10,
+    window_size: str = "1920,1080",
+) -> list[dict]:
     """Fetch up to `count` wallpapers after pressing shuffle once.
 
     Returns a list with length 0..count. Each entry is same schema as
@@ -158,16 +168,16 @@ def get_wallpapers_after_shuffle(count: int, verbose: bool = True) -> list[dict]
     """
     if count <= 0:
         return []
-    driver = _init_driver()
+    driver = _init_driver(window_size)
     try:
-        driver.get("https://ultrawidewallpapers.net/gallery")
+        driver.get(url)
         if verbose:
             print("Navigated to gallery page.")
         try:
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, webdriver_timeout).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
             )
-            shuffle_button = WebDriverWait(driver, 10).until(
+            shuffle_button = WebDriverWait(driver, webdriver_timeout).until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "#shuffleButton"))
             )
             shuffle_button.click()
