@@ -12,6 +12,7 @@ from ctypes import wintypes
 from monitors import gather_monitors
 from wallpaper_scraper import get_wallpapers_after_shuffle
 from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
+from download_history import load_history, append_history
 
 # Windows API constants and functions for console manipulation
 SW_HIDE = 0
@@ -108,18 +109,32 @@ def run_once() -> bool:
         return False
 
     import tempfile, shutil
+    # Load persistent history of previously downloaded image URLs
+    os.makedirs(destinationFolder, exist_ok=True)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    history_file = os.path.join(script_dir, "download_history.txt")
+    downloaded_history = load_history(history_file)
+    if downloaded_history:
+        log_print(f"Loaded download history with {len(downloaded_history)} entries.")
+    else:
+        log_print("No prior download history (starting fresh).")
     tmp_dir = tempfile.mkdtemp(prefix="uww_dl_")
     log_print(f"Downloading {len(wallpapers)} image(s) to temporary folder {tmp_dir} ...")
     tmp_files: list[str] = []
+    url_for_file: dict[str, str] = {}
     for idx, wp in enumerate(wallpapers, start=1):
         url = wp.get("image_url")
         if not url:
             log_print(f"Wallpaper {idx} missing image_url, skipping.")
             continue
+        if url in downloaded_history:
+            log_print(f"Skipping already-downloaded image (#{idx}): {url}")
+            continue
         saved_path = download_image(url, tmp_dir, verbose=verbose_logging)
         if saved_path:
             log_print(f"Downloaded wallpaper {idx} -> {saved_path}")
             tmp_files.append(saved_path)
+            url_for_file[saved_path] = url
         else:
             log_print(f"Failed to download wallpaper {idx}")
 
@@ -133,6 +148,7 @@ def run_once() -> bool:
 
     os.makedirs(destinationFolder, exist_ok=True)
     final_files: list[str] = []
+    newly_downloaded_urls: list[str] = []
     for src in cropped_files:
         try:
             fname = os.path.basename(src)
@@ -146,6 +162,10 @@ def run_once() -> bool:
                     pass
             shutil.move(src, dest_path)
             final_files.append(os.path.abspath(dest_path))
+            # Map back to URL and add to history list if we have one
+            original_url = url_for_file.get(src)
+            if original_url:
+                newly_downloaded_urls.append(original_url)
         except Exception as e:
             log_print(f"Failed to move {src} into destination: {e}")
 
@@ -175,6 +195,13 @@ def run_once() -> bool:
             log_print("No old files to prune in destination folder.")
     else:
         log_print("No images successfully processed; destination unchanged.")
+
+    # Persist history updates (only after successful processing)
+    if newly_downloaded_urls:
+        append_history(history_file, newly_downloaded_urls)
+        log_print(f"Recorded {len(newly_downloaded_urls)} new image URL(s) to history.")
+    else:
+        log_print("No new images were added to history this run.")
 
     return bool(final_files)
 
