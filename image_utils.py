@@ -151,10 +151,141 @@ def crop_image_to_aspect(
         return None
 
 
+def set_wallpaper(image_path: str, verbose: bool = True) -> bool:
+    """Set the system wallpaper to the specified image.
+
+    Parameters:
+        image_path: path to the image file to set as wallpaper.
+        verbose: if True, print status messages.
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    try:
+        if os.name != "nt":
+            if verbose:
+                print("Wallpaper setting is only supported on Windows.")
+            return False
+
+        import ctypes
+        from ctypes import wintypes
+
+        # Windows API constants
+        SPI_SETDESKWALLPAPER = 0x0014
+        SPIF_UPDATEINIFILE = 0x01
+        SPIF_SENDWININICHANGE = 0x02
+
+        # Convert path to absolute and ensure it exists
+        abs_path = os.path.abspath(image_path)
+        if not os.path.exists(abs_path):
+            if verbose:
+                print(f"Wallpaper image does not exist: {abs_path}")
+            return False
+
+        # Set wallpaper using Windows API
+        user32 = ctypes.windll.user32
+        result = user32.SystemParametersInfoW(
+            SPI_SETDESKWALLPAPER,
+            0,
+            abs_path,
+            SPIF_UPDATEINIFILE | SPIF_SENDWININICHANGE
+        )
+
+        if result:
+            if verbose:
+                print(f"Successfully set wallpaper to: {abs_path}")
+            return True
+        else:
+            if verbose:
+                print(f"Failed to set wallpaper: SystemParametersInfoW returned {result}")
+            return False
+
+    except Exception as e:
+        if verbose:
+            print(f"Failed to set wallpaper: {e}")
+        return False
+
+
+def stitch_images_for_monitors(image_paths: list[str], monitors: list, output_path: str, verbose: bool = True) -> str | None:
+    """Stitch multiple images into a single image based on monitor layout.
+
+    Parameters:
+        image_paths: list of paths to images to stitch (one per monitor).
+        monitors: list of MonitorInfo objects describing monitor layout.
+        output_path: path where to save the stitched image.
+        verbose: if True, print status messages.
+
+    Returns:
+        Path to the stitched image or None on failure.
+    """
+    try:
+        ensure_dependencies()
+        if len(image_paths) != len(monitors):
+            if verbose:
+                print(f"Number of images ({len(image_paths)}) must match number of monitors ({len(monitors)})")
+            return None
+
+        if not image_paths:
+            if verbose:
+                print("No images provided for stitching")
+            return None
+
+        # Calculate total desktop dimensions
+        min_x = min(m.x for m in monitors)
+        min_y = min(m.y for m in monitors)
+        max_x = max(m.x + m.width for m in monitors)
+        max_y = max(m.y + m.height for m in monitors)
+
+        total_width = max_x - min_x
+        total_height = max_y - min_y
+
+        if verbose:
+            print(f"Creating stitched image of size {total_width}x{total_height}")
+
+        # Create new image with total desktop size
+        stitched_image = Image.new('RGB', (total_width, total_height), (0, 0, 0))
+
+        # Paste each monitor's image at its position
+        for i, (image_path, monitor) in enumerate(zip(image_paths, monitors)):
+            try:
+                with Image.open(image_path) as img:
+                    # Resize image to fit monitor dimensions if needed
+                    if img.size != (monitor.width, monitor.height):
+                        img = img.resize((monitor.width, monitor.height), Image.Resampling.LANCZOS)
+
+                    # Calculate position relative to total desktop
+                    x_pos = monitor.x - min_x
+                    y_pos = monitor.y - min_y
+
+                    stitched_image.paste(img, (x_pos, y_pos))
+
+                    if verbose:
+                        print(f"Added monitor {i+1} ({monitor.name}) at position ({x_pos}, {y_pos})")
+
+            except Exception as e:
+                if verbose:
+                    print(f"Failed to process image for monitor {i+1}: {e}")
+                return None
+
+        # Save the stitched image
+        stitched_image.save(output_path, 'JPEG', quality=95)
+        if verbose:
+            print(f"Successfully created stitched wallpaper: {output_path}")
+
+        return output_path
+
+    except Exception as e:
+        if verbose:
+            print(f"Failed to stitch images: {e}")
+        return None
+
+
 __all__ = [
     "fetch_image_dimensions",
     "simplify_ratio",
     "ensure_dependencies",
     "download_image",
     "crop_image_to_aspect",
+    "set_wallpaper",
+    "stitch_images_for_monitors",
 ]

@@ -19,8 +19,8 @@ This file contains all customizable settings for the UltraWideWallpapers network
 ### interval_seconds
 
 - **Type**: integer
-- **Default**: 600
-- **Description**: Time interval between wallpaper fetch cycles in seconds (10 minutes by default).
+- **Default**: 900
+- **Description**: Time interval between wallpaper fetch cycles in seconds (15 minutes by default).
 
 ### aspect_ratio
 
@@ -74,3 +74,15 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Type**: string
 - **Default**: "1920,1080"
 - **Description**: Browser window size for headless Chrome operations.
+
+### stitch_wallpapers
+
+- **Type**: boolean
+- **Default**: false
+- **Description**: Whether to stitch downloaded wallpapers into a single image based on monitor layout. When enabled, creates one large wallpaper spanning all monitors. When disabled, uses original behavior (downloads individual wallpapers but doesn't set them as wallpaper).
+
+### stitched_wallpaper_filename
+
+- **Type**: string
+- **Default**: "stitched_wallpaper.jpg"
+- **Description**: Filename for the stitched wallpaper image when stitch_wallpapers is enabled.

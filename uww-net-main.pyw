@@ -10,9 +10,9 @@ import ctypes
 from ctypes import wintypes
 import json
 
-from monitors import gather_monitors
+from monitors import gather_monitors, MonitorInfo
 from wallpaper_scraper import get_wallpapers_after_shuffle, get_unique_wallpapers
-from image_utils import ensure_dependencies, download_image, crop_image_to_aspect
+from image_utils import ensure_dependencies, download_image, crop_image_to_aspect, set_wallpaper, stitch_images_for_monitors
 from download_history import load_history, append_history
 
 # Load configuration
@@ -36,7 +36,9 @@ except FileNotFoundError:
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
             "window_size": "1920,1080"
-        }
+        },
+        "stitch_wallpapers": False,
+        "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
     }
 except json.JSONDecodeError as e:
     print(f"Error parsing config file: {e}. Using default values.")
@@ -53,7 +55,9 @@ except json.JSONDecodeError as e:
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
             "window_size": "1920,1080"
-        }
+        },
+        "stitch_wallpapers": False,
+        "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
     }
 
 # Windows API constants and functions for console manipulation
@@ -121,6 +125,25 @@ def toggle_verbose_logging(icon, item):
     status = "enabled" if verbose_logging else "disabled"
     if verbose_logging:
         print(f"Verbose logging {status}")  # Always print this status change
+
+
+def toggle_wallpaper_stitching(icon, item):
+    """Toggle wallpaper stitching on/off."""
+    global config
+    current_state = config.get("stitch_wallpapers", False)
+    config["stitch_wallpapers"] = not current_state
+    status = "enabled" if config["stitch_wallpapers"] else "disabled"
+    if verbose_logging:
+        print(f"Wallpaper stitching {status}")
+    # Save the updated config to file
+    try:
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        if verbose_logging:
+            print("Configuration saved.")
+    except Exception as e:
+        if verbose_logging:
+            print(f"Failed to save configuration: {e}")
 
 
 def run_once() -> bool:
@@ -267,6 +290,29 @@ def run_once() -> bool:
     else:
         log_print("No new images were added to history this run.")
 
+    # Set wallpaper if we have successfully processed images
+    if final_files:
+        if config.get("stitch_wallpapers", False):
+            # Stitch images into a single wallpaper
+            stitched_path = os.path.join(destinationFolder, config.get("stitched_wallpaper_filename", "stitched_wallpaper.jpg"))
+            stitched_result = stitch_images_for_monitors(final_files, monitors_list, stitched_path, verbose_logging)
+            if stitched_result:
+                wallpaper_set = set_wallpaper(stitched_result, verbose_logging)
+                if wallpaper_set:
+                    log_print("Successfully set stitched wallpaper as system wallpaper.")
+                else:
+                    log_print("Failed to set stitched wallpaper as system wallpaper.")
+            else:
+                log_print("Failed to create stitched wallpaper.")
+        else:
+            # Original behavior: set the first image as wallpaper (or could implement per-monitor setting)
+            if final_files:
+                wallpaper_set = set_wallpaper(final_files[0], verbose_logging)
+                if wallpaper_set:
+                    log_print(f"Successfully set wallpaper to: {os.path.basename(final_files[0])}")
+                else:
+                    log_print("Failed to set wallpaper.")
+
     return bool(final_files)
 
 
@@ -399,7 +445,8 @@ def main():
         pystray.MenuItem("Run Now", run_now),
         pystray.MenuItem("Toggle Console", toggle_console),
         pystray.MenuItem("Toggle Logging", toggle_verbose_logging),
-    pystray.MenuItem("Restart", restart_app),
+        pystray.MenuItem("Toggle Wallpaper Stitching", toggle_wallpaper_stitching),
+        pystray.MenuItem("Restart", restart_app),
         pystray.MenuItem("Exit", exit_app)
     )
 
