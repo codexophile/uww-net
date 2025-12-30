@@ -36,9 +36,19 @@ def get_unique_wallpapers(
     driver = _init_driver(window_size)
     collected: list[dict] = []
     try:
-        driver.get(url)
-        if verbose:
-            print("Navigated to gallery page (unique mode).")
+        try:
+            driver.get(url)
+            if verbose:
+                print("Navigated to gallery page (unique mode).")
+        except TimeoutError as e:
+            if verbose:
+                print(f"Connection timeout while loading gallery page: {e}")
+            return []
+        except Exception as e:
+            if verbose:
+                print(f"Error loading gallery page: {e}")
+            return []
+        
         try:
             WebDriverWait(driver, webdriver_timeout).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))
@@ -170,9 +180,19 @@ def get_wallpapers_after_shuffle(
         return []
     driver = _init_driver(window_size)
     try:
-        driver.get(url)
-        if verbose:
-            print("Navigated to gallery page.")
+        try:
+            driver.get(url)
+            if verbose:
+                print("Navigated to gallery page.")
+        except TimeoutError as e:
+            if verbose:
+                print(f"Connection timeout while loading gallery page: {e}")
+            return []
+        except Exception as e:
+            if verbose:
+                print(f"Error loading gallery page: {e}")
+            return []
+        
         try:
             WebDriverWait(driver, webdriver_timeout).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, "#galleryContainer .image-link"))

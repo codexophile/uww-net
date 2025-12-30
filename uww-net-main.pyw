@@ -2,7 +2,7 @@ from dataclasses import asdict
 import os
 import time
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import pystray
 from PIL import Image, ImageDraw
@@ -341,9 +341,19 @@ def wallpaper_loop(args):
             os.system("clear")
         log_print(f"===== Run #{run_number} =====")
         start = time.time()
-        success = run_once()
-        duration = time.time() - start
-        log_print(f"Run #{run_number} {'succeeded' if success else 'completed'} in {duration:.1f}s")
+        try:
+            success = run_once()
+            duration = time.time() - start
+            log_print(f"Run #{run_number} {'succeeded' if success else 'completed'} in {duration:.1f}s")
+        except TimeoutError as e:
+            duration = time.time() - start
+            log_print(f"Run #{run_number} timed out after {duration:.1f}s: {e}")
+            log_print("Will retry on next cycle.")
+        except Exception as e:
+            duration = time.time() - start
+            log_print(f"Run #{run_number} encountered an error after {duration:.1f}s: {type(e).__name__}: {e}")
+            log_print("Will retry on next cycle.")
+        
         if not running:
             break
         sleep_for = max(0, args.interval - duration)
