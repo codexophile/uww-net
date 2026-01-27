@@ -7,6 +7,7 @@ A Python application that automatically downloads wallpapers from ultrawidewallp
 - **Automatic Wallpaper Downloads**: Fetches wallpapers from ultrawidewallpapers.net
 - **Multi-Monitor Support**: Detects and handles multiple monitors
 - **Wallpaper Stitching**: Option to stitch multiple wallpapers into a single large image spanning all monitors
+- **Brightness Filtering**: Automatically skips overly bright images that might be uncomfortable for light-sensitive eyes
 - **System Tray Integration**: Runs in the background with a system tray icon
 - **Duplicate Prevention**: Tracks downloaded wallpapers to avoid duplicates
 - **Aspect Ratio Cropping**: Crops wallpapers to match monitor aspect ratios
@@ -31,6 +32,7 @@ Edit `config.json` to customize settings:
 - `destination_folder`: Folder where wallpapers are stored
 - `interval_seconds`: Time between automatic downloads
 - `verbose_logging`: Enable detailed logging
+- `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
 
 ## Usage
 

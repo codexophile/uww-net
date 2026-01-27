@@ -40,6 +40,12 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Default**: "download_history.txt"
 - **Description**: Filename for storing download history to avoid duplicates.
 
+### brightness_threshold
+
+- **Type**: float
+- **Default**: 200.0
+- **Description**: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness greater than or equal to this threshold are automatically discarded and replaced with another image. This is useful for people with light-sensitive eyes. Lower values filter out brighter images (e.g., 150 for darker wallpapers only), higher values allow brighter images (e.g., 220 for more variety). The brightness is calculated as the average grayscale value of all pixels in the image.
+
 ### wallpaper_source
 
 - **Type**: object

@@ -206,6 +206,56 @@ def set_wallpaper(image_path: str, verbose: bool = True) -> bool:
         return False
 
 
+def is_image_too_bright(
+    image_path: str,
+    brightness_threshold: float = 200.0,
+    sample_size: int = 10000,
+    verbose: bool = True,
+) -> bool:
+    """Check if an image is too bright based on average luminance.
+
+    Parameters:
+        image_path: path to the image file to check.
+        brightness_threshold: maximum average brightness (0-255). Images with
+                             average brightness >= threshold are considered too bright.
+        sample_size: number of pixels to sample. If 0, samples all pixels (slower).
+        verbose: if True, print diagnostic messages.
+
+    Returns:
+        True if the image is too bright, False otherwise.
+    """
+    try:
+        ensure_dependencies()
+        with Image.open(image_path) as img:  # type: ignore
+            # Convert to grayscale for brightness calculation
+            if img.mode != 'L':
+                gray_img = img.convert('L')  # type: ignore
+            else:
+                gray_img = img
+            
+            # Get pixel data
+            pixels = list(gray_img.getdata())  # type: ignore
+            
+            # Sample pixels if requested
+            if sample_size > 0 and len(pixels) > sample_size:
+                import random
+                pixels = random.sample(pixels, sample_size)
+            
+            # Calculate average brightness
+            avg_brightness = sum(pixels) / len(pixels) if pixels else 0
+            
+            is_too_bright = avg_brightness >= brightness_threshold
+            if verbose:
+                print(f"Image brightness check: {avg_brightness:.1f} (threshold: {brightness_threshold}) - {'TOO BRIGHT' if is_too_bright else 'OK'}")
+            
+            return is_too_bright
+    except Exception as e:
+        if verbose:
+            print(f"Failed to check image brightness: {e}")
+        # If we can't check, assume it's okay
+        return False
+
+
 def stitch_images_for_monitors(image_paths: list[str], monitors: list, output_path: str, verbose: bool = True) -> str | None:
     """Stitch multiple images into a single image based on monitor layout.
 
@@ -288,4 +338,5 @@ __all__ = [
     "crop_image_to_aspect",
     "set_wallpaper",
     "stitch_images_for_monitors",
+    "is_image_too_bright",
 ]

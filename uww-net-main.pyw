@@ -12,7 +12,7 @@ import json
 
 from monitors import gather_monitors, MonitorInfo
 from wallpaper_scraper import get_wallpapers_after_shuffle, get_unique_wallpapers
-from image_utils import ensure_dependencies, download_image, crop_image_to_aspect, set_wallpaper, stitch_images_for_monitors
+from image_utils import ensure_dependencies, download_image, crop_image_to_aspect, set_wallpaper, stitch_images_for_monitors, is_image_too_bright
 from download_history import load_history, append_history
 
 # Load configuration
@@ -30,6 +30,7 @@ except FileNotFoundError:
         "aspect_ratio": {"width": 16, "height": 9},
         "temp_dir_prefix": "uww_dl_",
         "history_file": "download_history.txt",
+        "brightness_threshold": 200.0,
         "wallpaper_source": {
             "url": "https://ultrawidewallpapers.net/gallery",
             "max_shuffles": 25,
@@ -49,6 +50,7 @@ except json.JSONDecodeError as e:
         "aspect_ratio": {"width": 16, "height": 9},
         "temp_dir_prefix": "uww_dl_",
         "history_file": "download_history.txt",
+        "brightness_threshold": 200.0,
         "wallpaper_source": {
             "url": "https://ultrawidewallpapers.net/gallery",
             "max_shuffles": 25,
@@ -233,10 +235,34 @@ def run_once() -> bool:
         else:
             log_print(f"Skipping move for image that failed to crop: {path}")
 
+    # Filter out too-bright images
+    brightness_threshold = config.get("brightness_threshold", 200.0)
+    filtered_files: list[str] = []
+    for path in cropped_files:
+        if is_image_too_bright(path, brightness_threshold=brightness_threshold, verbose=verbose_logging):
+            log_print(f"Skipping bright image: {os.path.basename(path)}")
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+        else:
+            filtered_files.append(path)
+
+    if not filtered_files:
+        log_print("All images were too bright; skipping wallpaper update.")
+        # Clean up temporary directory (ignore errors)
+        try:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
+        return False
+
+
     os.makedirs(destinationFolder, exist_ok=True)
     final_files: list[str] = []
     newly_downloaded_urls: list[str] = []
-    for src in cropped_files:
+    for src in filtered_files:
         try:
             fname = os.path.basename(src)
             dest_path = os.path.join(destinationFolder, fname)
