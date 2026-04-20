@@ -54,8 +54,8 @@ This file contains all customizable settings for the UltraWideWallpapers network
 #### wallpaper_source.url
 
 - **Type**: string
-- **Default**: "https://ultrawidewallpapers.net/gallery"
-- **Description**: The URL of the wallpaper gallery to scrape.
+- **Default**: "https://ultrawidewallpapers.net/gallery?lang=en"
+- **Description**: The primary URL of the wallpaper gallery to scrape. If this endpoint fails or returns no gallery links, the scraper will automatically try additional URL variants.
 
 #### wallpaper_source.max_shuffles
 

@@ -33,6 +33,10 @@ Edit `config.json` to customize settings:
 - `interval_seconds`: Time between automatic downloads
 - `verbose_logging`: Enable detailed logging
 - `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
+- `wallpaper_source.url`: Primary gallery URL. Recommended value is `https://ultrawidewallpapers.net/gallery?lang=en`.
+
+The scraper now automatically falls back across multiple gallery URL variants and selector patterns if the site markup changes.
+If browser automation is blocked by the source site (for example Selenium receives 403/404), the scraper also falls back to HTTP HTML parsing to extract high-res wallpaper links.
 
 ## Usage
 
@@ -96,3 +100,4 @@ The application automatically detects your monitor setup using:
 - Check that destination folder exists and is writable
 - Verify monitor detection works (run with verbose logging)
 - For stitching issues, ensure you have one wallpaper per monitor
+- If gallery loading fails intermittently, keep `wallpaper_source.url` at `https://ultrawidewallpapers.net/gallery?lang=en` and leave verbose logging enabled to capture page diagnostics.

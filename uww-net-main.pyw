@@ -32,7 +32,7 @@ except FileNotFoundError:
         "history_file": "download_history.txt",
         "brightness_threshold": 200.0,
         "wallpaper_source": {
-            "url": "https://ultrawidewallpapers.net/gallery",
+            "url": "https://ultrawidewallpapers.net/gallery?lang=en",
             "max_shuffles": 25,
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
@@ -52,7 +52,7 @@ except json.JSONDecodeError as e:
         "history_file": "download_history.txt",
         "brightness_threshold": 200.0,
         "wallpaper_source": {
-            "url": "https://ultrawidewallpapers.net/gallery",
+            "url": "https://ultrawidewallpapers.net/gallery?lang=en",
             "max_shuffles": 25,
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
