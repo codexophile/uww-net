@@ -65,6 +65,7 @@ except json.JSONDecodeError as e:
 # Windows API constants and functions for console manipulation
 SW_HIDE = 0
 SW_SHOW = 5
+CTRL_CLOSE_EVENT = 2
 kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
 user32 = ctypes.WinDLL('user32', use_last_error=True)
 GetConsoleWindow = kernel32.GetConsoleWindow
@@ -77,6 +78,12 @@ SetStdHandle = kernel32.SetStdHandle
 SetStdHandle.argtypes = [ctypes.c_int, wintypes.HANDLE]
 STD_OUTPUT_HANDLE = -11
 STD_ERROR_HANDLE = -12
+
+# Console event handler
+HandlerRoutine = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.DWORD)
+SetConsoleCtrlHandler = kernel32.SetConsoleCtrlHandler
+SetConsoleCtrlHandler.argtypes = [HandlerRoutine, wintypes.BOOL]
+SetConsoleCtrlHandler.restype = wintypes.BOOL
 
 # Global flag to control the wallpaper loop
 running = True
@@ -105,6 +112,22 @@ def create_icon():
     for i in range(0, 64, 8):
         draw.rectangle([i, 0, i+4, 64], fill='white')
     return img
+
+
+def console_ctrl_handler(ctrl_type):
+    """Handle console control events (like clicking the X button)."""
+    global console_visible
+    if ctrl_type == CTRL_CLOSE_EVENT:
+        # Instead of allowing the console to close (which would kill the process),
+        # just hide it
+        hwnd = GetConsoleWindow()
+        if hwnd:
+            ShowWindow(hwnd, SW_HIDE)
+            console_visible = False
+        # Return True to indicate we handled the event (prevents process termination)
+        return True
+    # Return False for other events to use default handling
+    return False
 
 
 def toggle_console(icon, item):
@@ -437,6 +460,10 @@ def main():
         # Initially hide the console
         if hwnd:
             ShowWindow(hwnd, SW_HIDE)
+        
+        # Register console event handler to prevent closing the console from terminating the app
+        handler = HandlerRoutine(console_ctrl_handler)
+        SetConsoleCtrlHandler(handler, True)
     
     parser = argparse.ArgumentParser(description="UltraWideWallpapers fetcher loop")
     parser.add_argument("--interval", type=int, default=config["interval_seconds"], help=f"Interval between runs in seconds (default {config['interval_seconds']})")
