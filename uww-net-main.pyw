@@ -37,7 +37,8 @@ except FileNotFoundError:
             "max_shuffles": 25,
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
-            "window_size": "1920,1080"
+            "window_size": "1920,1080",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         },
         "stitch_wallpapers": False,
         "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
@@ -58,7 +59,8 @@ except json.JSONDecodeError as e:
             "max_shuffles": 25,
             "webdriver_timeout": 10,
             "shuffle_timeout": 5,
-            "window_size": "1920,1080"
+            "window_size": "1920,1080",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         },
         "stitch_wallpapers": False,
         "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
@@ -99,6 +101,11 @@ verbose_logging = config["verbose_logging"]
 destinationFolder = config["destination_folder"]
 
 config.setdefault("headless_mode", True)
+config.setdefault("wallpaper_source", {})
+config["wallpaper_source"].setdefault(
+    "user_agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+)
 
 
 def save_config() -> bool:
@@ -223,7 +230,8 @@ def run_once() -> bool:
         webdriver_timeout=config["wallpaper_source"]["webdriver_timeout"],
         window_size=config["wallpaper_source"]["window_size"],
         shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"],
-        headless=config.get("headless_mode", True)
+        headless=config.get("headless_mode", True),
+        browser_user_agent=config["wallpaper_source"].get("user_agent"),
     )
     if not wallpapers:
         wallpapers = get_wallpapers_after_shuffle(
@@ -232,7 +240,8 @@ def run_once() -> bool:
             config["wallpaper_source"]["url"],
             config["wallpaper_source"]["webdriver_timeout"],
             config["wallpaper_source"]["window_size"],
-            headless=config.get("headless_mode", True)
+            headless=config.get("headless_mode", True),
+            browser_user_agent=config["wallpaper_source"].get("user_agent"),
         )
     if wallpapers and len(wallpapers) == monitor_count:
         log_print(f"Successfully extracted {len(wallpapers)} wallpapers (one per monitor).")
@@ -337,6 +346,7 @@ def run_once() -> bool:
             window_size=config["wallpaper_source"]["window_size"],
             shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"],
             headless=config.get("headless_mode", True),
+            browser_user_agent=config["wallpaper_source"].get("user_agent"),
         )
         if not extras:
             extras = get_wallpapers_after_shuffle(
@@ -346,6 +356,7 @@ def run_once() -> bool:
                 config["wallpaper_source"]["webdriver_timeout"],
                 config["wallpaper_source"]["window_size"],
                 headless=config.get("headless_mode", True),
+                browser_user_agent=config["wallpaper_source"].get("user_agent"),
             )
         if not extras:
             log_print("No replacement candidates returned this round.")

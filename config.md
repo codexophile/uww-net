@@ -93,6 +93,12 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Default**: "1920,1080"
 - **Description**: Browser window size used by Chrome during scraping.
 
+#### wallpaper_source.user_agent
+
+- **Type**: string
+- **Default**: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+- **Description**: Browser User-Agent sent by Selenium. Useful when headless mode is challenged by anti-bot checks that return fake 404 pages.
+
 ### stitch_wallpapers
 
 - **Type**: boolean

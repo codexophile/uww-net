@@ -41,6 +41,7 @@ HTTP_HEADERS = {
 }
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
+DEFAULT_BROWSER_USER_AGENT = HTTP_HEADERS["User-Agent"]
 
 
 def _candidate_gallery_urls(url: str) -> list[str]:
@@ -268,6 +269,7 @@ def get_unique_wallpapers(
     window_size: str = "1920,1080",
     shuffle_timeout: int = 5,
     headless: bool = True,
+    browser_user_agent: str | None = None,
 ) -> list[dict]:
     """Fetch up to ``count`` wallpapers whose URLs are not in ``skip_urls``.
 
@@ -281,7 +283,7 @@ def get_unique_wallpapers(
     if count <= 0:
         return []
     skip_urls = skip_urls or set()
-    driver = _init_driver(window_size, headless=headless)
+    driver = _init_driver(window_size, headless=headless, user_agent=browser_user_agent)
     collected: list[dict] = []
     try:
         if not _navigate_gallery_page(driver, url, webdriver_timeout, verbose, "unique mode"):
@@ -337,7 +339,11 @@ def get_unique_wallpapers(
     finally:
         driver.quit()
 
-def _init_driver(window_size: str = "1920,1080", headless: bool = True):
+def _init_driver(
+    window_size: str = "1920,1080",
+    headless: bool = True,
+    user_agent: str | None = None,
+):
     """Internal helper to create a quiet Chrome webdriver instance."""
     # Suppress noisy Chrome / GCM logs
     import os
@@ -347,6 +353,8 @@ def _init_driver(window_size: str = "1920,1080", headless: bool = True):
         os.environ.setdefault("CHROME_LOG_FILE", "/dev/null")
 
     chrome_options = Options()
+    effective_user_agent = (user_agent or "").strip() or DEFAULT_BROWSER_USER_AGENT
+    chrome_options.add_argument(f"--user-agent={effective_user_agent}")
     if headless:
         # Run fully headless so no Chrome window appears.
         # Use the modern headless implementation (Chrome 109+) for better compatibility.
@@ -366,10 +374,13 @@ def _init_driver(window_size: str = "1920,1080", headless: bool = True):
     chrome_options.add_argument("--disable-logging")  # keep explicit though we also exclude below
     chrome_options.add_argument("--disable-dev-shm-usage")  # robustness in constrained environments
     chrome_options.add_argument(f"--window-size={window_size}")  # consistent layout calculations headless
+    # Some sites gate Selenium traffic based on automation-specific browser fingerprints.
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     # 0=ALL, 1=INFO, 2=WARNING, 3=ERROR (actually FATAL). We choose 3 to hide most stuff.
     chrome_options.add_argument("--log-level=3")
     # Remove the typical 'enable-logging' switch Selenium injects that causes extra stderr.
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])  # type: ignore[arg-type]
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging", "enable-automation"])  # type: ignore[arg-type]
+    chrome_options.add_experimental_option("useAutomationExtension", False)
     # Essential option to disable DevTools remote debugging
     chrome_options.add_argument("--remote-debugging-port=0")  # Disable remote debugging
 
@@ -383,15 +394,35 @@ def _init_driver(window_size: str = "1920,1080", headless: bool = True):
     try:
         with redirect_stdout(open(os.devnull, 'w')), redirect_stderr(open(os.devnull, 'w')):
             driver = webdriver.Chrome(options=chrome_options, service=service)
+            _apply_anti_detection_profile(driver)
             return driver
     except Exception as e:
         # If redirection fails, try without it
         try:
             driver = webdriver.Chrome(options=chrome_options, service=service)
+            _apply_anti_detection_profile(driver)
             return driver
         except Exception as e2:
             # If that also fails, provide a helpful error message
             raise RuntimeError(f"Failed to create Chrome WebDriver. Please ensure Chrome is installed and up to date. Error: {e2}") from e2
+
+
+def _apply_anti_detection_profile(driver: webdriver.Chrome) -> None:
+    """Apply lightweight anti-detection patches to reduce fake 403/404 responses."""
+    script = """
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+        });
+    """
+    try:
+        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": script})
+    except Exception:
+        # Some driver/browser combinations may not expose the CDP endpoint.
+        pass
+    try:
+        driver.execute_script(script)
+    except Exception:
+        pass
 
 
 def get_wallpapers_after_shuffle(
@@ -401,6 +432,7 @@ def get_wallpapers_after_shuffle(
     webdriver_timeout: int = 10,
     window_size: str = "1920,1080",
     headless: bool = True,
+    browser_user_agent: str | None = None,
 ) -> list[dict]:
     """Fetch up to `count` wallpapers after pressing shuffle once.
 
@@ -409,7 +441,7 @@ def get_wallpapers_after_shuffle(
     """
     if count <= 0:
         return []
-    driver = _init_driver(window_size, headless=headless)
+    driver = _init_driver(window_size, headless=headless, user_agent=browser_user_agent)
     try:
         if not _navigate_gallery_page(driver, url, webdriver_timeout, verbose, "single shuffle mode"):
             if verbose:

@@ -37,6 +37,7 @@ Edit `config.json` to customize settings:
 - `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
 - `replacement_attempts`: Number of refill rounds used to replace rejected images (default `3`).
 - `wallpaper_source.url`: Primary gallery URL. Recommended value is `https://ultrawidewallpapers.net/gallery?lang=en`.
+- `wallpaper_source.user_agent`: Browser User-Agent used by Selenium sessions. If headless mode gets persistent 404 responses, keep this aligned with a recent stable Chrome UA on your machine.
 
 The scraper now automatically falls back across multiple gallery URL variants and selector patterns if the site markup changes.
 If browser automation is blocked by the source site (for example Selenium receives 403/404), the scraper also falls back to HTTP HTML parsing to extract high-res wallpaper links.
@@ -105,6 +106,7 @@ The application automatically detects your monitor setup using:
 - Verify monitor detection works (run with verbose logging)
 - For stitching issues, ensure you have one wallpaper per monitor
 - If gallery loading fails intermittently, keep `wallpaper_source.url` at `https://ultrawidewallpapers.net/gallery?lang=en` and leave verbose logging enabled to capture page diagnostics.
+- If headless mode returns repeated `Error 404 - Not found` but non-headless works, the source site is likely serving anti-bot fallback pages. Keep headless enabled, but set `wallpaper_source.user_agent` to a current desktop Chrome UA and keep URL fallbacks enabled.
 - If image downloads return `403`, keep verbose logging enabled and verify the host is not temporarily rate-limiting. The downloader now sends browser-style image headers automatically, but the source site can still enforce transient blocks.
 - Log output now distinguishes between `download failed`, `crop failed`, and `brightness filtered` states so root cause is easier to identify.
 - When wallpaper stitching is enabled, the run now keeps backfilling until it has one accepted image per monitor (or exhausts replacement attempts). If it still cannot fill all slots, stitching is skipped for that cycle.
