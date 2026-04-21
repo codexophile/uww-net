@@ -16,6 +16,12 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Default**: true
 - **Description**: Enable/disable detailed logging output.
 
+### headless_mode
+
+- **Type**: boolean
+- **Default**: true
+- **Description**: Controls whether Chrome runs hidden in headless mode while scraping. Turn this off if you want to see the browser window during wallpaper fetching.
+
 ### interval_seconds
 
 - **Type**: integer
@@ -79,7 +85,7 @@ This file contains all customizable settings for the UltraWideWallpapers network
 
 - **Type**: string
 - **Default**: "1920,1080"
-- **Description**: Browser window size for headless Chrome operations.
+- **Description**: Browser window size used by Chrome during scraping.
 
 ### stitch_wallpapers
 

@@ -60,6 +60,7 @@ When running normally, the application runs in the background with a system tray
 - **Run Now**: Download wallpapers immediately
 - **Toggle Console**: Show/hide the console window
 - **Toggle Logging**: Enable/disable verbose logging
+- **Headless Mode**: Show or hide the Chrome window used for scraping
 - **Toggle Wallpaper Stitching**: Switch between stitched and individual wallpapers
 - **Restart**: Restart the application
 - **Exit**: Close the application

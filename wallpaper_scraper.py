@@ -266,6 +266,7 @@ def get_unique_wallpapers(
     webdriver_timeout: int = 10,
     window_size: str = "1920,1080",
     shuffle_timeout: int = 5,
+    headless: bool = True,
 ) -> list[dict]:
     """Fetch up to ``count`` wallpapers whose URLs are not in ``skip_urls``.
 
@@ -279,7 +280,7 @@ def get_unique_wallpapers(
     if count <= 0:
         return []
     skip_urls = skip_urls or set()
-    driver = _init_driver(window_size)
+    driver = _init_driver(window_size, headless=headless)
     collected: list[dict] = []
     try:
         if not _navigate_gallery_page(driver, url, webdriver_timeout, verbose, "unique mode"):
@@ -335,7 +336,7 @@ def get_unique_wallpapers(
     finally:
         driver.quit()
 
-def _init_driver(window_size: str = "1920,1080"):
+def _init_driver(window_size: str = "1920,1080", headless: bool = True):
     """Internal helper to create a quiet Chrome webdriver instance."""
     # Suppress noisy Chrome / GCM logs
     import os
@@ -345,14 +346,15 @@ def _init_driver(window_size: str = "1920,1080"):
         os.environ.setdefault("CHROME_LOG_FILE", "/dev/null")
 
     chrome_options = Options()
-    # Run fully headless so no Chrome window appears.
-    # Use the modern headless implementation (Chrome 109+) for better compatibility.
-    # If an older Chrome version is in use, Selenium/Chrome will gracefully fall back.
-    try:
-        chrome_options.add_argument("--headless=new")
-    except:
-        # Fallback to old headless mode if new one fails
-        chrome_options.add_argument("--headless")
+    if headless:
+        # Run fully headless so no Chrome window appears.
+        # Use the modern headless implementation (Chrome 109+) for better compatibility.
+        # If an older Chrome version is in use, Selenium/Chrome will gracefully fall back.
+        try:
+            chrome_options.add_argument("--headless=new")
+        except:
+            # Fallback to old headless mode if new one fails
+            chrome_options.add_argument("--headless")
     # Helpful stability flags when headless (esp. on Windows / some GPU drivers):
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-first-run")
@@ -397,6 +399,7 @@ def get_wallpapers_after_shuffle(
     url: str = "https://ultrawidewallpapers.net/gallery?lang=en",
     webdriver_timeout: int = 10,
     window_size: str = "1920,1080",
+    headless: bool = True,
 ) -> list[dict]:
     """Fetch up to `count` wallpapers after pressing shuffle once.
 
@@ -405,7 +408,7 @@ def get_wallpapers_after_shuffle(
     """
     if count <= 0:
         return []
-    driver = _init_driver(window_size)
+    driver = _init_driver(window_size, headless=headless)
     try:
         if not _navigate_gallery_page(driver, url, webdriver_timeout, verbose, "single shuffle mode"):
             if verbose:

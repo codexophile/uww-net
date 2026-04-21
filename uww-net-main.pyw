@@ -26,6 +26,7 @@ except FileNotFoundError:
     config = {
         "destination_folder": "C:\\media\\wallpapers",
         "verbose_logging": True,
+        "headless_mode": True,
         "interval_seconds": 600,
         "aspect_ratio": {"width": 16, "height": 9},
         "temp_dir_prefix": "uww_dl_",
@@ -46,6 +47,7 @@ except json.JSONDecodeError as e:
     config = {
         "destination_folder": "C:\\media\\wallpapers",
         "verbose_logging": True,
+        "headless_mode": True,
         "interval_seconds": 600,
         "aspect_ratio": {"width": 16, "height": 9},
         "temp_dir_prefix": "uww_dl_",
@@ -95,6 +97,20 @@ console_visible = False
 verbose_logging = config["verbose_logging"]
 
 destinationFolder = config["destination_folder"]
+
+config.setdefault("headless_mode", True)
+
+
+def save_config() -> bool:
+    """Persist the current configuration to disk."""
+    try:
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        if verbose_logging:
+            print(f"Failed to save configuration: {e}")
+        return False
 
 
 def log_print(*args, **kwargs):
@@ -152,6 +168,17 @@ def toggle_verbose_logging(icon, item):
         print(f"Verbose logging {status}")  # Always print this status change
 
 
+def toggle_headless_mode(icon, item):
+    """Toggle headless browser mode on/off."""
+    global config
+    current_state = config.get("headless_mode", True)
+    config["headless_mode"] = not current_state
+    status = "enabled" if config["headless_mode"] else "disabled"
+    if verbose_logging:
+        print(f"Headless mode {status}")
+    save_config()
+
+
 def toggle_wallpaper_stitching(icon, item):
     """Toggle wallpaper stitching on/off."""
     global config
@@ -160,15 +187,8 @@ def toggle_wallpaper_stitching(icon, item):
     status = "enabled" if config["stitch_wallpapers"] else "disabled"
     if verbose_logging:
         print(f"Wallpaper stitching {status}")
-    # Save the updated config to file
-    try:
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=2)
-        if verbose_logging:
-            print("Configuration saved.")
-    except Exception as e:
-        if verbose_logging:
-            print(f"Failed to save configuration: {e}")
+    if save_config() and verbose_logging:
+        print("Configuration saved.")
 
 
 def run_once() -> bool:
@@ -199,7 +219,8 @@ def run_once() -> bool:
         url=config["wallpaper_source"]["url"],
         webdriver_timeout=config["wallpaper_source"]["webdriver_timeout"],
         window_size=config["wallpaper_source"]["window_size"],
-        shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"]
+        shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"],
+        headless=config.get("headless_mode", True)
     )
     if not wallpapers:
         wallpapers = get_wallpapers_after_shuffle(
@@ -207,7 +228,8 @@ def run_once() -> bool:
             verbose_logging,
             config["wallpaper_source"]["url"],
             config["wallpaper_source"]["webdriver_timeout"],
-            config["wallpaper_source"]["window_size"]
+            config["wallpaper_source"]["window_size"],
+            headless=config.get("headless_mode", True)
         )
     if wallpapers and len(wallpapers) == monitor_count:
         log_print(f"Successfully extracted {len(wallpapers)} wallpapers (one per monitor).")
@@ -508,6 +530,7 @@ def main():
         pystray.MenuItem("Run Now", run_now),
         pystray.MenuItem("Toggle Console", toggle_console),
         pystray.MenuItem("Toggle Logging", toggle_verbose_logging),
+        pystray.MenuItem("Headless Mode", toggle_headless_mode, checked=lambda item: config.get("headless_mode", True)),
         pystray.MenuItem("Toggle Wallpaper Stitching", toggle_wallpaper_stitching),
         pystray.MenuItem("Restart", restart_app),
         pystray.MenuItem("Exit", exit_app)
