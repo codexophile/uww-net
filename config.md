@@ -52,6 +52,12 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Default**: 200.0
 - **Description**: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness greater than or equal to this threshold are automatically discarded and replaced with another image. This is useful for people with light-sensitive eyes. Lower values filter out brighter images (e.g., 150 for darker wallpapers only), higher values allow brighter images (e.g., 220 for more variety). The brightness is calculated as the average grayscale value of all pixels in the image.
 
+### replacement_attempts
+
+- **Type**: integer
+- **Default**: 3
+- **Description**: Number of refill rounds attempted when images are rejected during download, crop, or brightness checks. Each round requests only the number of missing images needed to match your monitor count.
+
 ### wallpaper_source
 
 - **Type**: object

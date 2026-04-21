@@ -13,7 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from image_utils import fetch_image_dimensions, simplify_ratio
+from image_utils import fetch_image_dimensions, simplify_ratio, build_image_request_headers
 
 GALLERY_LINK_SELECTORS = (
     "#galleryContainer .image-link",
@@ -224,9 +224,10 @@ def _http_fallback_links(url: str, limit: int, verbose: bool) -> list[str]:
     return results
 
 
-def _build_wallpaper_record(image_url: str, verbose: bool) -> dict:
+def _build_wallpaper_record(image_url: str, verbose: bool, referer: str | None = None) -> dict:
     """Build one wallpaper metadata record from an image URL."""
-    width, height = fetch_image_dimensions(image_url, verbose)
+    request_headers = build_image_request_headers(image_url, referer=referer)
+    width, height = fetch_image_dimensions(image_url, verbose, request_headers=request_headers)
     aspect_ratio = simplify_ratio(width, height)
     return {
         "image_url": image_url,
@@ -247,7 +248,7 @@ def _collect_via_http_fallback(count: int, skip_urls: set[str], url: str, verbos
         if image_url in skip_urls or any(r.get("image_url") == image_url for r in records):
             continue
         try:
-            records.append(_build_wallpaper_record(image_url, verbose))
+            records.append(_build_wallpaper_record(image_url, verbose, referer=url))
             if verbose:
                 print(f"Collected fallback wallpaper {len(records)}/{count}")
         except Exception as e:
@@ -313,7 +314,7 @@ def get_unique_wallpapers(
                     image_url = el.get_attribute("href")
                     if not image_url or image_url in skip_urls or any(r.get("image_url") == image_url for r in collected):
                         continue
-                    collected.append(_build_wallpaper_record(image_url, verbose))
+                    collected.append(_build_wallpaper_record(image_url, verbose, referer=driver.current_url))
                     if verbose:
                         print(f"Collected unique wallpaper {len(collected)}/{count}")
                 except Exception as inner_e:
@@ -434,7 +435,7 @@ def get_wallpapers_after_shuffle(
             for idx, el in enumerate(selected, start=1):
                 try:
                     image_url = el.get_attribute("href")
-                    results.append(_build_wallpaper_record(image_url, verbose))
+                    results.append(_build_wallpaper_record(image_url, verbose, referer=driver.current_url))
                     if verbose:
                         print(f"Collected wallpaper {idx}/{len(selected)}")
                 except Exception as inner_e:  # continue gathering others

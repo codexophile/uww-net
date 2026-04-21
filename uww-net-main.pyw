@@ -12,7 +12,7 @@ import json
 
 from monitors import gather_monitors, MonitorInfo
 from wallpaper_scraper import get_wallpapers_after_shuffle, get_unique_wallpapers
-from image_utils import ensure_dependencies, download_image, crop_image_to_aspect, set_wallpaper, stitch_images_for_monitors, is_image_too_bright
+from image_utils import ensure_dependencies, download_image, crop_image_to_aspect, set_wallpaper, stitch_images_for_monitors, is_image_too_bright, build_image_request_headers
 from download_history import load_history, append_history
 
 # Load configuration
@@ -198,6 +198,9 @@ def run_once() -> bool:
     """
     monitors_list = gather_monitors(verbose_logging)
     monitor_count = len(monitors_list)
+    if monitor_count <= 0:
+        log_print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] No monitors detected; skipping run.")
+        return False
     log_print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Detected {monitor_count} monitor(s).")
     # Load history early so we can request unique wallpapers
     os.makedirs(destinationFolder, exist_ok=True)
@@ -250,52 +253,117 @@ def run_once() -> bool:
         return False
 
     import tempfile, shutil
-    # Load persistent history of previously downloaded image URLs
-    # downloaded_history already loaded above
     tmp_dir = tempfile.mkdtemp(prefix=config["temp_dir_prefix"])
     log_print(f"Downloading {len(wallpapers)} image(s) to temporary folder {tmp_dir} ...")
-    tmp_files: list[str] = []
+
+    brightness_threshold = config.get("brightness_threshold", 200.0)
+    replacement_attempts = max(0, int(config.get("replacement_attempts", 3)))
+    accepted_files: list[str] = []
     url_for_file: dict[str, str] = {}
-    for idx, wp in enumerate(wallpapers, start=1):
+    attempted_urls: set[str] = set(downloaded_history)
+    download_failures = 0
+    crop_failures = 0
+    bright_rejections = 0
+
+    def process_wallpaper_candidate(wp: dict, label: str) -> bool:
+        nonlocal download_failures, crop_failures, bright_rejections
         url = wp.get("image_url")
         if not url:
-            log_print(f"Wallpaper {idx} missing image_url, skipping.")
-            continue
-        if url in downloaded_history:
-            log_print(f"Skipping already-downloaded image (#{idx}): {url}")
-            continue
-        saved_path = download_image(url, tmp_dir, verbose=verbose_logging)
-        if saved_path:
-            log_print(f"Downloaded wallpaper {idx} -> {saved_path}")
-            tmp_files.append(saved_path)
-            url_for_file[saved_path] = url
-        else:
-            log_print(f"Failed to download wallpaper {idx}")
+            log_print(f"{label} missing image_url, skipping.")
+            return False
+        if url in attempted_urls:
+            log_print(f"Skipping already-attempted image ({label}): {url}")
+            return False
 
-    cropped_files: list[str] = []
-    for path in tmp_files:
-        cropped = crop_image_to_aspect(path, config["aspect_ratio"]["width"], config["aspect_ratio"]["height"], inplace=True, verbose=verbose_logging)
-        if cropped:
-            cropped_files.append(cropped)
-        else:
-            log_print(f"Skipping move for image that failed to crop: {path}")
+        attempted_urls.add(url)
+        request_headers = build_image_request_headers(url)
+        saved_path = download_image(url, tmp_dir, verbose=verbose_logging, request_headers=request_headers)
+        if not saved_path:
+            download_failures += 1
+            log_print(f"Failed to download {label}")
+            return False
 
-    # Filter out too-bright images
-    brightness_threshold = config.get("brightness_threshold", 200.0)
-    filtered_files: list[str] = []
-    for path in cropped_files:
-        if is_image_too_bright(path, brightness_threshold=brightness_threshold, verbose=verbose_logging):
-            log_print(f"Skipping bright image: {os.path.basename(path)}")
+        cropped = crop_image_to_aspect(
+            saved_path,
+            config["aspect_ratio"]["width"],
+            config["aspect_ratio"]["height"],
+            inplace=True,
+            verbose=verbose_logging,
+        )
+        if not cropped:
+            crop_failures += 1
+            log_print(f"Skipping {label}; crop failed: {saved_path}")
             try:
-                os.remove(path)
+                os.remove(saved_path)
             except Exception:
                 pass
-        else:
-            filtered_files.append(path)
+            return False
 
-    if not filtered_files:
-        log_print("All images were too bright; skipping wallpaper update.")
-        # Clean up temporary directory (ignore errors)
+        if is_image_too_bright(cropped, brightness_threshold=brightness_threshold, verbose=verbose_logging):
+            bright_rejections += 1
+            log_print(f"Skipping bright image: {os.path.basename(cropped)}")
+            try:
+                os.remove(cropped)
+            except Exception:
+                pass
+            return False
+
+        accepted_files.append(cropped)
+        url_for_file[cropped] = url
+        log_print(f"Accepted {label} -> {os.path.basename(cropped)} ({len(accepted_files)}/{monitor_count})")
+        return True
+
+    for idx, wp in enumerate(wallpapers, start=1):
+        process_wallpaper_candidate(wp, f"wallpaper {idx}")
+
+    if len(accepted_files) < monitor_count:
+        log_print(
+            f"Need {monitor_count - len(accepted_files)} replacement image(s) after rejections. "
+            f"Will try up to {replacement_attempts} refill round(s)."
+        )
+
+    refill_round = 0
+    while len(accepted_files) < monitor_count and refill_round < replacement_attempts:
+        refill_round += 1
+        needed = monitor_count - len(accepted_files)
+        log_print(f"Refill round {refill_round}/{replacement_attempts}: requesting {needed} replacement image(s).")
+        extras = get_unique_wallpapers(
+            needed,
+            skip_urls=attempted_urls,
+            verbose=verbose_logging,
+            max_shuffles=config["wallpaper_source"]["max_shuffles"],
+            url=config["wallpaper_source"]["url"],
+            webdriver_timeout=config["wallpaper_source"]["webdriver_timeout"],
+            window_size=config["wallpaper_source"]["window_size"],
+            shuffle_timeout=config["wallpaper_source"]["shuffle_timeout"],
+            headless=config.get("headless_mode", True),
+        )
+        if not extras:
+            extras = get_wallpapers_after_shuffle(
+                needed,
+                verbose_logging,
+                config["wallpaper_source"]["url"],
+                config["wallpaper_source"]["webdriver_timeout"],
+                config["wallpaper_source"]["window_size"],
+                headless=config.get("headless_mode", True),
+            )
+        if not extras:
+            log_print("No replacement candidates returned this round.")
+            continue
+
+        for extra_idx, wp in enumerate(extras, start=1):
+            if len(accepted_files) >= monitor_count:
+                break
+            process_wallpaper_candidate(wp, f"replacement {refill_round}.{extra_idx}")
+
+    if not accepted_files:
+        if bright_rejections > 0 and download_failures == 0 and crop_failures == 0:
+            log_print("All images were too bright; skipping wallpaper update.")
+        else:
+            log_print(
+                "No images survived processing; "
+                f"download failures={download_failures}, crop failures={crop_failures}, bright rejects={bright_rejections}."
+            )
         try:
             import shutil
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -303,11 +371,17 @@ def run_once() -> bool:
             pass
         return False
 
+    if config.get("stitch_wallpapers", False) and len(accepted_files) < monitor_count:
+        log_print(
+            f"Only {len(accepted_files)}/{monitor_count} image(s) accepted after refill attempts; "
+            "cannot build a stitched wallpaper this cycle."
+        )
+
 
     os.makedirs(destinationFolder, exist_ok=True)
     final_files: list[str] = []
     newly_downloaded_urls: list[str] = []
-    for src in filtered_files:
+    for src in accepted_files:
         try:
             fname = os.path.basename(src)
             dest_path = os.path.join(destinationFolder, fname)
@@ -361,9 +435,17 @@ def run_once() -> bool:
     else:
         log_print("No new images were added to history this run.")
 
+    run_success = bool(final_files)
+
     # Set wallpaper if we have successfully processed images
     if final_files:
         if config.get("stitch_wallpapers", False):
+            if len(final_files) != monitor_count:
+                log_print(
+                    f"Skipping stitched wallpaper set because accepted image count ({len(final_files)}) "
+                    f"does not match monitor count ({monitor_count})."
+                )
+                return False
             # Stitch images into a single wallpaper
             stitched_path = os.path.join(destinationFolder, config.get("stitched_wallpaper_filename", "stitched_wallpaper.jpg"))
             stitched_result = stitch_images_for_monitors(final_files, monitors_list, stitched_path, verbose_logging)
@@ -373,8 +455,10 @@ def run_once() -> bool:
                     log_print("Successfully set stitched wallpaper as system wallpaper.")
                 else:
                     log_print("Failed to set stitched wallpaper as system wallpaper.")
+                run_success = bool(wallpaper_set)
             else:
                 log_print("Failed to create stitched wallpaper.")
+                run_success = False
         else:
             # Original behavior: set the first image as wallpaper (or could implement per-monitor setting)
             if final_files:
@@ -383,8 +467,9 @@ def run_once() -> bool:
                     log_print(f"Successfully set wallpaper to: {os.path.basename(final_files[0])}")
                 else:
                     log_print("Failed to set wallpaper.")
+                run_success = bool(wallpaper_set)
 
-    return bool(final_files)
+    return run_success
 
 
 def run_once_wrapper(args):

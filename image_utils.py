@@ -5,6 +5,7 @@ import math
 import os
 import re
 from io import BytesIO
+from urllib.parse import urlparse
 
 try:
     import requests  # type: ignore
@@ -19,10 +20,39 @@ def ensure_dependencies():
         raise RuntimeError("Missing dependencies. Install with: pip install requests Pillow")
 
 
-def fetch_image_dimensions(image_url: str, verbose: bool = True) -> tuple[int | None, int | None]:
+DEFAULT_IMAGE_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+}
+
+
+def build_image_request_headers(image_url: str, referer: str | None = None) -> dict[str, str]:
+    """Build request headers that are resilient against basic anti-hotlink checks."""
+    parsed = urlparse(image_url)
+    headers = dict(DEFAULT_IMAGE_HTTP_HEADERS)
+    if parsed.scheme and parsed.netloc:
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        headers["Origin"] = origin
+        headers["Referer"] = referer or f"{origin}/gallery?lang=en"
+    return headers
+
+
+def fetch_image_dimensions(
+    image_url: str,
+    verbose: bool = True,
+    request_headers: dict[str, str] | None = None,
+    request_cookies: dict[str, str] | None = None,
+) -> tuple[int | None, int | None]:
     try:
         ensure_dependencies()
-        resp = requests.get(image_url, timeout=15)  # type: ignore
+        headers = request_headers or build_image_request_headers(image_url)
+        resp = requests.get(image_url, headers=headers, cookies=request_cookies, timeout=15)  # type: ignore
         resp.raise_for_status()
         img = Image.open(BytesIO(resp.content))  # type: ignore
         width, height = img.size
@@ -47,7 +77,14 @@ def _sanitize_filename(name: str) -> str:
     return name or "image.jpg"
 
 
-def download_image(image_url: str, destination_folder: str, filename: str | None = None, verbose: bool = True) -> str | None:
+def download_image(
+    image_url: str,
+    destination_folder: str,
+    filename: str | None = None,
+    verbose: bool = True,
+    request_headers: dict[str, str] | None = None,
+    request_cookies: dict[str, str] | None = None,
+) -> str | None:
     """Download an image to ``destination_folder``.
 
     Returns the absolute path of the saved file or ``None`` on failure.
@@ -67,7 +104,8 @@ def download_image(image_url: str, destination_folder: str, filename: str | None
         while os.path.exists(dest_path):
             dest_path = f"{base}_{counter}{ext}"
             counter += 1
-        resp = requests.get(image_url, timeout=30)  # type: ignore
+        headers = request_headers or build_image_request_headers(image_url)
+        resp = requests.get(image_url, headers=headers, cookies=request_cookies, timeout=30)  # type: ignore
         resp.raise_for_status()
         content_type = resp.headers.get("Content-Type", "").lower()
         if "image" not in content_type:
@@ -332,6 +370,7 @@ def stitch_images_for_monitors(image_paths: list[str], monitors: list, output_pa
 
 __all__ = [
     "fetch_image_dimensions",
+    "build_image_request_headers",
     "simplify_ratio",
     "ensure_dependencies",
     "download_image",

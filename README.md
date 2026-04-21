@@ -8,6 +8,8 @@ A Python application that automatically downloads wallpapers from ultrawidewallp
 - **Multi-Monitor Support**: Detects and handles multiple monitors
 - **Wallpaper Stitching**: Option to stitch multiple wallpapers into a single large image spanning all monitors
 - **Brightness Filtering**: Automatically skips overly bright images that might be uncomfortable for light-sensitive eyes
+- **Hotlink-Resilient Downloads**: Uses browser-like headers (including Referer/Origin) for image metadata and file downloads to reduce 403 blocks
+- **Automatic Replacements**: If a candidate image fails download, crop, or brightness checks, the app requests replacements to fill missing monitor slots
 - **System Tray Integration**: Runs in the background with a system tray icon
 - **Duplicate Prevention**: Tracks downloaded wallpapers to avoid duplicates
 - **Aspect Ratio Cropping**: Crops wallpapers to match monitor aspect ratios
@@ -33,6 +35,7 @@ Edit `config.json` to customize settings:
 - `interval_seconds`: Time between automatic downloads
 - `verbose_logging`: Enable detailed logging
 - `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
+- `replacement_attempts`: Number of refill rounds used to replace rejected images (default `3`).
 - `wallpaper_source.url`: Primary gallery URL. Recommended value is `https://ultrawidewallpapers.net/gallery?lang=en`.
 
 The scraper now automatically falls back across multiple gallery URL variants and selector patterns if the site markup changes.
@@ -102,3 +105,6 @@ The application automatically detects your monitor setup using:
 - Verify monitor detection works (run with verbose logging)
 - For stitching issues, ensure you have one wallpaper per monitor
 - If gallery loading fails intermittently, keep `wallpaper_source.url` at `https://ultrawidewallpapers.net/gallery?lang=en` and leave verbose logging enabled to capture page diagnostics.
+- If image downloads return `403`, keep verbose logging enabled and verify the host is not temporarily rate-limiting. The downloader now sends browser-style image headers automatically, but the source site can still enforce transient blocks.
+- Log output now distinguishes between `download failed`, `crop failed`, and `brightness filtered` states so root cause is easier to identify.
+- When wallpaper stitching is enabled, the run now keeps backfilling until it has one accepted image per monitor (or exhausts replacement attempts). If it still cannot fill all slots, stitching is skipped for that cycle.
