@@ -31,7 +31,14 @@ A Python application that automatically downloads wallpapers from ultrawidewallp
 Edit `config.json` to customize settings:
 
 - `stitch_wallpapers`: Set to `true` to enable wallpaper stitching, `false` for individual wallpapers
-- `destination_folder`: Folder where wallpapers are stored
+- `storage.parent_folder`: Parent folder for wallpaper outputs (for example `C:\\media\\wallpapers`)
+- `storage.originals_subfolder`: Subfolder for raw downloaded images (default `originals`)
+- `storage.cropped_subfolder`: Subfolder for cropped images used for wallpaper (default `cropped`)
+- `storage.stitched_subfolder`: Subfolder for stitched outputs (default `stitched`)
+- `storage.max_originals`: Max files kept in originals (default `50`)
+- `storage.max_cropped`: Max files kept in cropped (default `50`)
+- `storage.max_stitched`: Max files kept in stitched (default `1`)
+- `destination_folder`: Legacy compatibility key; used as fallback when `storage.parent_folder` is missing
 - `interval_seconds`: Time between automatic downloads
 - `verbose_logging`: Enable detailed logging
 - `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
@@ -75,12 +82,19 @@ When `stitch_wallpapers` is enabled:
 
 1. Downloads one wallpaper per monitor
 2. Creates a single large image that spans all monitors
-3. Sets the stitched image as the system wallpaper
+3. Writes the stitched file under `storage.stitched_subfolder`
+4. Sets the stitched image as the system wallpaper
 
 When disabled (default):
 
 1. Downloads wallpapers for each monitor
-2. Sets the first downloaded wallpaper as the system wallpaper
+2. Stores raw files under `storage.originals_subfolder` and cropped files under `storage.cropped_subfolder`
+3. Sets the first cropped wallpaper as the system wallpaper
+
+Retention behavior:
+
+1. Originals and cropped folders are pruned independently to their configured max counts (defaults: 50 each)
+2. Stitched folder is pruned to its configured max count (default: 1)
 
 ## Monitor Detection
 

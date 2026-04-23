@@ -2,6 +2,7 @@ from dataclasses import asdict
 import os
 import time
 import argparse
+import copy
 from datetime import datetime, timedelta
 import threading
 import pystray
@@ -18,53 +19,45 @@ from download_history import load_history, append_history
 # Load configuration
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
+DEFAULT_CONFIG = {
+    "destination_folder": "C:\\media\\wallpapers",
+    "verbose_logging": True,
+    "headless_mode": True,
+    "interval_seconds": 600,
+    "aspect_ratio": {"width": 16, "height": 9},
+    "temp_dir_prefix": "uww_dl_",
+    "history_file": "download_history.txt",
+    "brightness_threshold": 200.0,
+    "replacement_attempts": 3,
+    "wallpaper_source": {
+        "url": "https://ultrawidewallpapers.net/gallery?lang=en",
+        "max_shuffles": 25,
+        "webdriver_timeout": 10,
+        "shuffle_timeout": 5,
+        "window_size": "1920,1080",
+        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    },
+    "storage": {
+        "parent_folder": "C:\\media\\wallpapers",
+        "originals_subfolder": "originals",
+        "cropped_subfolder": "cropped",
+        "stitched_subfolder": "stitched",
+        "max_originals": 50,
+        "max_cropped": 50,
+        "max_stitched": 1
+    },
+    "stitch_wallpapers": False,
+    "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
+}
 try:
     with open(config_path, 'r') as f:
         config = json.load(f)
 except FileNotFoundError:
     print(f"Config file not found at {config_path}. Using default values.")
-    config = {
-        "destination_folder": "C:\\media\\wallpapers",
-        "verbose_logging": True,
-        "headless_mode": True,
-        "interval_seconds": 600,
-        "aspect_ratio": {"width": 16, "height": 9},
-        "temp_dir_prefix": "uww_dl_",
-        "history_file": "download_history.txt",
-        "brightness_threshold": 200.0,
-        "wallpaper_source": {
-            "url": "https://ultrawidewallpapers.net/gallery?lang=en",
-            "max_shuffles": 25,
-            "webdriver_timeout": 10,
-            "shuffle_timeout": 5,
-            "window_size": "1920,1080",
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        },
-        "stitch_wallpapers": False,
-        "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
-    }
+    config = copy.deepcopy(DEFAULT_CONFIG)
 except json.JSONDecodeError as e:
     print(f"Error parsing config file: {e}. Using default values.")
-    config = {
-        "destination_folder": "C:\\media\\wallpapers",
-        "verbose_logging": True,
-        "headless_mode": True,
-        "interval_seconds": 600,
-        "aspect_ratio": {"width": 16, "height": 9},
-        "temp_dir_prefix": "uww_dl_",
-        "history_file": "download_history.txt",
-        "brightness_threshold": 200.0,
-        "wallpaper_source": {
-            "url": "https://ultrawidewallpapers.net/gallery?lang=en",
-            "max_shuffles": 25,
-            "webdriver_timeout": 10,
-            "shuffle_timeout": 5,
-            "window_size": "1920,1080",
-            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        },
-        "stitch_wallpapers": False,
-        "stitched_wallpaper_filename": "stitched_wallpaper.jpg"
-    }
+    config = copy.deepcopy(DEFAULT_CONFIG)
 
 # Windows API constants and functions for console manipulation
 SW_HIDE = 0
@@ -97,15 +90,27 @@ console_visible = False
 
 # Global flag for verbose logging
 verbose_logging = config["verbose_logging"]
-
-destinationFolder = config["destination_folder"]
-
+config.setdefault("destination_folder", DEFAULT_CONFIG["destination_folder"])
 config.setdefault("headless_mode", True)
+config.setdefault("replacement_attempts", DEFAULT_CONFIG["replacement_attempts"])
 config.setdefault("wallpaper_source", {})
 config["wallpaper_source"].setdefault(
     "user_agent",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 )
+config["wallpaper_source"].setdefault("url", DEFAULT_CONFIG["wallpaper_source"]["url"])
+config["wallpaper_source"].setdefault("max_shuffles", DEFAULT_CONFIG["wallpaper_source"]["max_shuffles"])
+config["wallpaper_source"].setdefault("webdriver_timeout", DEFAULT_CONFIG["wallpaper_source"]["webdriver_timeout"])
+config["wallpaper_source"].setdefault("shuffle_timeout", DEFAULT_CONFIG["wallpaper_source"]["shuffle_timeout"])
+config["wallpaper_source"].setdefault("window_size", DEFAULT_CONFIG["wallpaper_source"]["window_size"])
+config.setdefault("storage", {})
+config["storage"].setdefault("parent_folder", config.get("destination_folder", DEFAULT_CONFIG["storage"]["parent_folder"]))
+config["storage"].setdefault("originals_subfolder", DEFAULT_CONFIG["storage"]["originals_subfolder"])
+config["storage"].setdefault("cropped_subfolder", DEFAULT_CONFIG["storage"]["cropped_subfolder"])
+config["storage"].setdefault("stitched_subfolder", DEFAULT_CONFIG["storage"]["stitched_subfolder"])
+config["storage"].setdefault("max_originals", DEFAULT_CONFIG["storage"]["max_originals"])
+config["storage"].setdefault("max_cropped", DEFAULT_CONFIG["storage"]["max_cropped"])
+config["storage"].setdefault("max_stitched", DEFAULT_CONFIG["storage"]["max_stitched"])
 
 
 def save_config() -> bool:
@@ -124,6 +129,57 @@ def log_print(*args, **kwargs):
     """Print function that respects the verbose_logging flag."""
     if verbose_logging:
         print(*args, **kwargs)
+
+
+def get_storage_paths() -> dict[str, str]:
+    """Resolve configured image storage directories."""
+    storage_cfg = config.get("storage", {})
+    parent = storage_cfg.get("parent_folder") or config.get("destination_folder", DEFAULT_CONFIG["destination_folder"])
+    originals = os.path.join(parent, storage_cfg.get("originals_subfolder", "originals"))
+    cropped = os.path.join(parent, storage_cfg.get("cropped_subfolder", "cropped"))
+    stitched = os.path.join(parent, storage_cfg.get("stitched_subfolder", "stitched"))
+    return {
+        "parent": parent,
+        "originals": originals,
+        "cropped": cropped,
+        "stitched": stitched,
+    }
+
+
+def prune_folder_to_limit(folder_path: str, max_files: int, protected_paths: set[str] | None = None) -> int:
+    """Keep only the newest ``max_files`` files in ``folder_path``."""
+    try:
+        max_allowed = max(0, int(max_files))
+    except Exception:
+        max_allowed = 0
+
+    protected_paths = {os.path.normcase(os.path.abspath(p)) for p in (protected_paths or set())}
+    file_entries: list[tuple[float, str]] = []
+    for entry in os.scandir(folder_path):
+        if not entry.is_file():
+            continue
+        abs_path = os.path.normcase(os.path.abspath(entry.path))
+        if abs_path in protected_paths:
+            continue
+        try:
+            mtime = entry.stat().st_mtime
+        except Exception:
+            mtime = 0.0
+        file_entries.append((mtime, entry.path))
+
+    if len(file_entries) <= max_allowed:
+        return 0
+
+    file_entries.sort(key=lambda item: item[0], reverse=True)
+    to_delete = file_entries[max_allowed:]
+    removed = 0
+    for _, path in to_delete:
+        try:
+            os.remove(path)
+            removed += 1
+        except Exception as e:
+            log_print(f"Could not remove stale file '{os.path.basename(path)}': {e}")
+    return removed
 
 
 def create_icon():
@@ -210,7 +266,11 @@ def run_once() -> bool:
         return False
     log_print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] Detected {monitor_count} monitor(s).")
     # Load history early so we can request unique wallpapers
-    os.makedirs(destinationFolder, exist_ok=True)
+    storage_paths = get_storage_paths()
+    os.makedirs(storage_paths["parent"], exist_ok=True)
+    os.makedirs(storage_paths["originals"], exist_ok=True)
+    os.makedirs(storage_paths["cropped"], exist_ok=True)
+    os.makedirs(storage_paths["stitched"], exist_ok=True)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     history_file = os.path.join(script_dir, config["history_file"])
     downloaded_history = load_history(history_file)
@@ -267,8 +327,7 @@ def run_once() -> bool:
 
     brightness_threshold = config.get("brightness_threshold", 200.0)
     replacement_attempts = max(0, int(config.get("replacement_attempts", 3)))
-    accepted_files: list[str] = []
-    url_for_file: dict[str, str] = {}
+    accepted_records: list[dict[str, str]] = []
     attempted_urls: set[str] = set(downloaded_history)
     download_failures = 0
     crop_failures = 0
@@ -296,7 +355,7 @@ def run_once() -> bool:
             saved_path,
             config["aspect_ratio"]["width"],
             config["aspect_ratio"]["height"],
-            inplace=True,
+            inplace=False,
             verbose=verbose_logging,
         )
         if not cropped:
@@ -315,26 +374,33 @@ def run_once() -> bool:
                 os.remove(cropped)
             except Exception:
                 pass
+            try:
+                os.remove(saved_path)
+            except Exception:
+                pass
             return False
 
-        accepted_files.append(cropped)
-        url_for_file[cropped] = url
-        log_print(f"Accepted {label} -> {os.path.basename(cropped)} ({len(accepted_files)}/{monitor_count})")
+        accepted_records.append({
+            "original_tmp": saved_path,
+            "cropped_tmp": cropped,
+            "url": url,
+        })
+        log_print(f"Accepted {label} -> {os.path.basename(cropped)} ({len(accepted_records)}/{monitor_count})")
         return True
 
     for idx, wp in enumerate(wallpapers, start=1):
         process_wallpaper_candidate(wp, f"wallpaper {idx}")
 
-    if len(accepted_files) < monitor_count:
+    if len(accepted_records) < monitor_count:
         log_print(
-            f"Need {monitor_count - len(accepted_files)} replacement image(s) after rejections. "
+            f"Need {monitor_count - len(accepted_records)} replacement image(s) after rejections. "
             f"Will try up to {replacement_attempts} refill round(s)."
         )
 
     refill_round = 0
-    while len(accepted_files) < monitor_count and refill_round < replacement_attempts:
+    while len(accepted_records) < monitor_count and refill_round < replacement_attempts:
         refill_round += 1
-        needed = monitor_count - len(accepted_files)
+        needed = monitor_count - len(accepted_records)
         log_print(f"Refill round {refill_round}/{replacement_attempts}: requesting {needed} replacement image(s).")
         extras = get_unique_wallpapers(
             needed,
@@ -363,11 +429,11 @@ def run_once() -> bool:
             continue
 
         for extra_idx, wp in enumerate(extras, start=1):
-            if len(accepted_files) >= monitor_count:
+            if len(accepted_records) >= monitor_count:
                 break
             process_wallpaper_candidate(wp, f"replacement {refill_round}.{extra_idx}")
 
-    if not accepted_files:
+    if not accepted_records:
         if bright_rejections > 0 and download_failures == 0 and crop_failures == 0:
             log_print("All images were too bright; skipping wallpaper update.")
         else:
@@ -382,35 +448,42 @@ def run_once() -> bool:
             pass
         return False
 
-    if config.get("stitch_wallpapers", False) and len(accepted_files) < monitor_count:
+    if config.get("stitch_wallpapers", False) and len(accepted_records) < monitor_count:
         log_print(
-            f"Only {len(accepted_files)}/{monitor_count} image(s) accepted after refill attempts; "
+            f"Only {len(accepted_records)}/{monitor_count} image(s) accepted after refill attempts; "
             "cannot build a stitched wallpaper this cycle."
         )
 
-
-    os.makedirs(destinationFolder, exist_ok=True)
-    final_files: list[str] = []
+    final_cropped_files: list[str] = []
     newly_downloaded_urls: list[str] = []
-    for src in accepted_files:
+    for record in accepted_records:
         try:
-            fname = os.path.basename(src)
-            dest_path = os.path.join(destinationFolder, fname)
-            # Overwrite if exists; we prune anyway
             import shutil
-            if os.path.exists(dest_path):
+            original_src = record["original_tmp"]
+            cropped_src = record["cropped_tmp"]
+            original_dest = os.path.join(storage_paths["originals"], os.path.basename(original_src))
+            cropped_dest = os.path.join(storage_paths["cropped"], os.path.basename(cropped_src))
+            if os.path.exists(original_dest):
                 try:
-                    os.remove(dest_path)
+                    os.remove(original_dest)
                 except Exception:
                     pass
-            shutil.move(src, dest_path)
-            final_files.append(os.path.abspath(dest_path))
-            # Map back to URL and add to history list if we have one
-            original_url = url_for_file.get(src)
+            if os.path.exists(cropped_dest):
+                try:
+                    os.remove(cropped_dest)
+                except Exception:
+                    pass
+            shutil.move(original_src, original_dest)
+            if os.path.normcase(os.path.abspath(cropped_src)) != os.path.normcase(os.path.abspath(original_src)):
+                shutil.move(cropped_src, cropped_dest)
+            else:
+                shutil.copy2(original_dest, cropped_dest)
+            final_cropped_files.append(os.path.abspath(cropped_dest))
+            original_url = record.get("url")
             if original_url:
                 newly_downloaded_urls.append(original_url)
         except Exception as e:
-            log_print(f"Failed to move {src} into destination: {e}")
+            log_print(f"Failed to move accepted files into storage folders: {e}")
 
     # Clean up temporary directory (ignore errors)
     try:
@@ -419,25 +492,18 @@ def run_once() -> bool:
     except Exception:
         pass
 
-    # Prune destination folder to only keep final_files
-    if final_files:
-        keep_set = {os.path.normcase(p) for p in final_files}
-        removed = 0
-        for entry in os.scandir(destinationFolder):
-            if entry.is_file():
-                ap = os.path.normcase(os.path.abspath(entry.path))
-                if ap not in keep_set:
-                    try:
-                        os.remove(entry.path)
-                        removed += 1
-                    except Exception as e:
-                        log_print(f"Could not remove stale file '{entry.name}': {e}")
-        if removed:
-            log_print(f"Pruned {removed} old file(s) from destination folder.")
-        else:
-            log_print("No old files to prune in destination folder.")
+    # Prune configured image folders to retention limits.
+    if final_cropped_files:
+        originals_removed = prune_folder_to_limit(storage_paths["originals"], config["storage"].get("max_originals", 50))
+        cropped_removed = prune_folder_to_limit(storage_paths["cropped"], config["storage"].get("max_cropped", 50))
+        if originals_removed:
+            log_print(f"Pruned {originals_removed} old file(s) from originals folder.")
+        if cropped_removed:
+            log_print(f"Pruned {cropped_removed} old file(s) from cropped folder.")
+        if not originals_removed and not cropped_removed:
+            log_print("No old files to prune in originals/cropped folders.")
     else:
-        log_print("No images successfully processed; destination unchanged.")
+        log_print("No images successfully processed; storage folders unchanged.")
 
     # Persist history updates (only after successful processing)
     if newly_downloaded_urls:
@@ -446,39 +512,50 @@ def run_once() -> bool:
     else:
         log_print("No new images were added to history this run.")
 
-    run_success = bool(final_files)
+    run_success = bool(final_cropped_files)
+    stitched_path: str | None = None
 
     # Set wallpaper if we have successfully processed images
-    if final_files:
+    if final_cropped_files:
         if config.get("stitch_wallpapers", False):
-            if len(final_files) != monitor_count:
+            if len(final_cropped_files) != monitor_count:
                 log_print(
-                    f"Skipping stitched wallpaper set because accepted image count ({len(final_files)}) "
+                    f"Skipping stitched wallpaper set because accepted image count ({len(final_cropped_files)}) "
                     f"does not match monitor count ({monitor_count})."
                 )
-                return False
-            # Stitch images into a single wallpaper
-            stitched_path = os.path.join(destinationFolder, config.get("stitched_wallpaper_filename", "stitched_wallpaper.jpg"))
-            stitched_result = stitch_images_for_monitors(final_files, monitors_list, stitched_path, verbose_logging)
-            if stitched_result:
-                wallpaper_set = set_wallpaper(stitched_result, verbose_logging)
-                if wallpaper_set:
-                    log_print("Successfully set stitched wallpaper as system wallpaper.")
-                else:
-                    log_print("Failed to set stitched wallpaper as system wallpaper.")
-                run_success = bool(wallpaper_set)
-            else:
-                log_print("Failed to create stitched wallpaper.")
                 run_success = False
+            else:
+                # Stitch images into a single wallpaper
+                stitched_path = os.path.join(storage_paths["stitched"], config.get("stitched_wallpaper_filename", "stitched_wallpaper.jpg"))
+                stitched_result = stitch_images_for_monitors(final_cropped_files, monitors_list, stitched_path, verbose_logging)
+                if stitched_result:
+                    wallpaper_set = set_wallpaper(stitched_result, verbose_logging)
+                    if wallpaper_set:
+                        log_print("Successfully set stitched wallpaper as system wallpaper.")
+                    else:
+                        log_print("Failed to set stitched wallpaper as system wallpaper.")
+                    run_success = bool(wallpaper_set)
+                else:
+                    log_print("Failed to create stitched wallpaper.")
+                    run_success = False
         else:
             # Original behavior: set the first image as wallpaper (or could implement per-monitor setting)
-            if final_files:
-                wallpaper_set = set_wallpaper(final_files[0], verbose_logging)
+            if final_cropped_files:
+                wallpaper_set = set_wallpaper(final_cropped_files[0], verbose_logging)
                 if wallpaper_set:
-                    log_print(f"Successfully set wallpaper to: {os.path.basename(final_files[0])}")
+                    log_print(f"Successfully set wallpaper to: {os.path.basename(final_cropped_files[0])}")
                 else:
                     log_print("Failed to set wallpaper.")
                 run_success = bool(wallpaper_set)
+
+    protected = {stitched_path} if stitched_path and os.path.exists(stitched_path) else set()
+    stitched_removed = prune_folder_to_limit(
+        storage_paths["stitched"],
+        config["storage"].get("max_stitched", 1),
+        protected_paths=protected,
+    )
+    if stitched_removed:
+        log_print(f"Pruned {stitched_removed} old file(s) from stitched folder.")
 
     return run_success
 

@@ -8,7 +8,54 @@ This file contains all customizable settings for the UltraWideWallpapers network
 
 - **Type**: string
 - **Default**: "C:\\media\\wallpapers"
-- **Description**: The folder where downloaded wallpapers will be stored.
+- **Description**: Legacy base folder setting. If `storage.parent_folder` is set (recommended), that value is used as the active parent wallpaper folder.
+
+### storage
+
+- **Type**: object
+- **Description**: Controls where processed files are stored under one parent folder and how many files are retained in each folder.
+
+#### storage.parent_folder
+
+- **Type**: string
+- **Default**: "C:\\media\\wallpapers"
+- **Description**: Parent folder that contains all wallpaper output subfolders.
+
+#### storage.originals_subfolder
+
+- **Type**: string
+- **Default**: "originals"
+- **Description**: Subfolder (inside `storage.parent_folder`) used for raw downloaded images before crop.
+
+#### storage.cropped_subfolder
+
+- **Type**: string
+- **Default**: "cropped"
+- **Description**: Subfolder (inside `storage.parent_folder`) used for cropped images.
+
+#### storage.stitched_subfolder
+
+- **Type**: string
+- **Default**: "stitched"
+- **Description**: Subfolder (inside `storage.parent_folder`) used for stitched output images.
+
+#### storage.max_originals
+
+- **Type**: integer
+- **Default**: 50
+- **Description**: Maximum number of files kept in the originals folder. Older files are removed automatically.
+
+#### storage.max_cropped
+
+- **Type**: integer
+- **Default**: 50
+- **Description**: Maximum number of files kept in the cropped folder. Older files are removed automatically.
+
+#### storage.max_stitched
+
+- **Type**: integer
+- **Default**: 1
+- **Description**: Maximum number of files kept in the stitched folder. Older files are removed automatically.
 
 ### verbose_logging
 
