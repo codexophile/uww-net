@@ -43,6 +43,7 @@ Edit `config.json` to customize settings:
 - `verbose_logging`: Enable detailed logging
 - `brightness_threshold`: Maximum average brightness (0-255) allowed for wallpapers. Images with average brightness >= this value are silently discarded and replaced. Default is 200.0. Lower values are stricter (e.g., 150 for darker wallpapers, 220 for brighter ones).
 - `replacement_attempts`: Number of refill rounds used to replace rejected images (default `3`).
+- `set_wallpaper`: Set to `true` to apply processed wallpaper(s) to Windows, or `false` to only download/process/save images without changing the current wallpaper.
 - `wallpaper_source.url`: Primary gallery URL. Recommended value is `https://ultrawidewallpapers.net/gallery?lang=en`.
 - `wallpaper_source.user_agent`: Browser User-Agent used by Selenium sessions. If headless mode gets persistent 404 responses, keep this aligned with a recent stable Chrome UA on your machine.
 
@@ -71,6 +72,7 @@ When running normally, the application runs in the background with a system tray
 - **Run Now**: Download wallpapers immediately
 - **Toggle Console**: Show/hide the console window
 - **Toggle Logging**: Enable/disable verbose logging
+- **Set Wallpaper**: Enable/disable applying processed wallpaper(s) to the desktop
 - **Headless Mode**: Show or hide the Chrome window used for scraping
 - **Toggle Wallpaper Stitching**: Switch between stitched and individual wallpapers
 - **Restart**: Restart the application
@@ -83,13 +85,19 @@ When `stitch_wallpapers` is enabled:
 1. Downloads one wallpaper per monitor
 2. Creates a single large image that spans all monitors
 3. Writes the stitched file under `storage.stitched_subfolder`
-4. Sets the stitched image as the system wallpaper
+4. Sets the stitched image as the system wallpaper (only when `set_wallpaper` is enabled)
 
 When disabled (default):
 
 1. Downloads wallpapers for each monitor
 2. Stores raw files under `storage.originals_subfolder` and cropped files under `storage.cropped_subfolder`
-3. Sets the first cropped wallpaper as the system wallpaper
+3. Sets the first cropped wallpaper as the system wallpaper (only when `set_wallpaper` is enabled)
+
+When `set_wallpaper` is disabled:
+
+1. Downloading, crop processing, brightness filtering, and storage pruning still run normally
+2. Stitched output is still generated when `stitch_wallpapers` is enabled and enough images are accepted
+3. No wallpaper is applied to Windows for that cycle
 
 Retention behavior:
 

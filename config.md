@@ -105,6 +105,12 @@ This file contains all customizable settings for the UltraWideWallpapers network
 - **Default**: 3
 - **Description**: Number of refill rounds attempted when images are rejected during download, crop, or brightness checks. Each round requests only the number of missing images needed to match your monitor count.
 
+### set_wallpaper
+
+- **Type**: boolean
+- **Default**: true
+- **Description**: Controls whether processed wallpaper images are applied to the current Windows wallpaper. When set to `false`, the app still downloads, filters, crops, stitches (if enabled), stores, and prunes images, but does not call the OS wallpaper update.
+
 ### wallpaper_source
 
 - **Type**: object
@@ -150,7 +156,7 @@ This file contains all customizable settings for the UltraWideWallpapers network
 
 - **Type**: boolean
 - **Default**: false
-- **Description**: Whether to stitch downloaded wallpapers into a single image based on monitor layout. When enabled, creates one large wallpaper spanning all monitors. When disabled, uses original behavior (downloads individual wallpapers but doesn't set them as wallpaper).
+- **Description**: Whether to stitch downloaded wallpapers into a single image based on monitor layout. When enabled, creates one large wallpaper spanning all monitors. When disabled, keeps individual processed wallpapers.
 
 ### stitched_wallpaper_filename
 

@@ -29,6 +29,7 @@ DEFAULT_CONFIG = {
     "history_file": "download_history.txt",
     "brightness_threshold": 200.0,
     "replacement_attempts": 3,
+    "set_wallpaper": True,
     "wallpaper_source": {
         "url": "https://ultrawidewallpapers.net/gallery?lang=en",
         "max_shuffles": 25,
@@ -93,6 +94,7 @@ verbose_logging = config["verbose_logging"]
 config.setdefault("destination_folder", DEFAULT_CONFIG["destination_folder"])
 config.setdefault("headless_mode", True)
 config.setdefault("replacement_attempts", DEFAULT_CONFIG["replacement_attempts"])
+config.setdefault("set_wallpaper", DEFAULT_CONFIG["set_wallpaper"])
 config.setdefault("wallpaper_source", {})
 config["wallpaper_source"].setdefault(
     "user_agent",
@@ -250,6 +252,18 @@ def toggle_wallpaper_stitching(icon, item):
     status = "enabled" if config["stitch_wallpapers"] else "disabled"
     if verbose_logging:
         print(f"Wallpaper stitching {status}")
+    if save_config() and verbose_logging:
+        print("Configuration saved.")
+
+
+def toggle_set_wallpaper(icon, item):
+    """Toggle wallpaper application on/off."""
+    global config
+    current_state = config.get("set_wallpaper", True)
+    config["set_wallpaper"] = not current_state
+    status = "enabled" if config["set_wallpaper"] else "disabled"
+    if verbose_logging:
+        print(f"Wallpaper setting {status}")
     if save_config() and verbose_logging:
         print("Configuration saved.")
 
@@ -515,7 +529,7 @@ def run_once() -> bool:
     run_success = bool(final_cropped_files)
     stitched_path: str | None = None
 
-    # Set wallpaper if we have successfully processed images
+    # Apply wallpaper only if enabled; image download/processing always runs.
     if final_cropped_files:
         if config.get("stitch_wallpapers", False):
             if len(final_cropped_files) != monitor_count:
@@ -529,24 +543,31 @@ def run_once() -> bool:
                 stitched_path = os.path.join(storage_paths["stitched"], config.get("stitched_wallpaper_filename", "stitched_wallpaper.jpg"))
                 stitched_result = stitch_images_for_monitors(final_cropped_files, monitors_list, stitched_path, verbose_logging)
                 if stitched_result:
-                    wallpaper_set = set_wallpaper(stitched_result, verbose_logging)
-                    if wallpaper_set:
-                        log_print("Successfully set stitched wallpaper as system wallpaper.")
+                    if config.get("set_wallpaper", True):
+                        wallpaper_set = set_wallpaper(stitched_result, verbose_logging)
+                        if wallpaper_set:
+                            log_print("Successfully set stitched wallpaper as system wallpaper.")
+                        else:
+                            log_print("Failed to set stitched wallpaper as system wallpaper.")
+                        run_success = bool(wallpaper_set)
                     else:
-                        log_print("Failed to set stitched wallpaper as system wallpaper.")
-                    run_success = bool(wallpaper_set)
+                        log_print("Wallpaper setting is disabled; stitched wallpaper was created but not applied.")
+                        run_success = True
                 else:
                     log_print("Failed to create stitched wallpaper.")
                     run_success = False
         else:
             # Original behavior: set the first image as wallpaper (or could implement per-monitor setting)
-            if final_cropped_files:
+            if final_cropped_files and config.get("set_wallpaper", True):
                 wallpaper_set = set_wallpaper(final_cropped_files[0], verbose_logging)
                 if wallpaper_set:
                     log_print(f"Successfully set wallpaper to: {os.path.basename(final_cropped_files[0])}")
                 else:
                     log_print("Failed to set wallpaper.")
                 run_success = bool(wallpaper_set)
+            elif final_cropped_files:
+                log_print("Wallpaper setting is disabled; processed image(s) were saved but not applied.")
+                run_success = True
 
     protected = {stitched_path} if stitched_path and os.path.exists(stitched_path) else set()
     stitched_removed = prune_folder_to_limit(
@@ -703,6 +724,7 @@ def main():
         pystray.MenuItem("Run Now", run_now),
         pystray.MenuItem("Toggle Console", toggle_console),
         pystray.MenuItem("Toggle Logging", toggle_verbose_logging),
+        pystray.MenuItem("Set Wallpaper", toggle_set_wallpaper, checked=lambda item: config.get("set_wallpaper", True)),
         pystray.MenuItem("Headless Mode", toggle_headless_mode, checked=lambda item: config.get("headless_mode", True)),
         pystray.MenuItem("Toggle Wallpaper Stitching", toggle_wallpaper_stitching),
         pystray.MenuItem("Restart", restart_app),
